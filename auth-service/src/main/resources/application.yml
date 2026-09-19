@@ -10,7 +10,20 @@ spring:
     username: root
     password: ***REMOVED***
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
 
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
+
+auth:
+  jwt:
+    secret: change-this-secret-to-a-random-value-at-least-32-bytes
+    access-token-ttl-seconds: 1800
+    refresh-token-ttl-seconds: 604800
+  login-rate-limit:
+    max-attempts: 5
+    window-seconds: 60

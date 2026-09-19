@@ -5,7 +5,10 @@ import java.time.LocalDateTime;
 public class User {
 
     private Long id;
+    private String uid;
     private String username;
+    private String phone;
+    private String email;
     private String passwordHash;
     private Integer status;
     private LocalDateTime createdAt;
@@ -13,6 +16,14 @@ public class User {
 
     public Long getId() {
         return id;
+    }
+
+    public String getUid() {
+        return uid;
+    }
+
+    public void setUid(String uid) {
+        this.uid = uid;
     }
 
     public void setId(Long id) {
@@ -25,6 +36,22 @@ public class User {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getPasswordHash() {

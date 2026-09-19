@@ -1,41 +1,98 @@
 package com.example.authservice.service;
 
-import com.example.authservice.dto.LoginRequest;
-import com.example.authservice.dto.RegisterRequest;
-import com.example.authservice.entity.User;
-import com.example.authservice.exception.BusinessException;
-import com.example.authservice.repository.UserRepository;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import com.example.authservice.dto.LoginRequest;
+import com.example.authservice.dto.LoginResponse;
+import com.example.authservice.dto.RefreshTokenRequest;
+import com.example.authservice.entity.User;
+import com.example.authservice.exception.BusinessException;
+import com.example.authservice.repository.UserRepository;
+import com.example.authservice.verification.enums.VerificationPurpose;
+import com.example.authservice.verification.enums.VerificationType;
 
 @Service
 public class AuthService {
 
-    private static final int SUCCESS_CODE = 0;
     private static final int BUSINESS_ERROR_CODE = 1001;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final VerificationService verificationService;
+    private final JwtTokenService jwtTokenService;
+    private final SessionService sessionService;
+    private final JwtBlacklistService jwtBlacklistService;
+    private final long accessTokenTtlSeconds;
+    private final long refreshTokenTtlSeconds;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       VerificationService verificationService, JwtTokenService jwtTokenService,
+                       SessionService sessionService,
+                       JwtBlacklistService jwtBlacklistService,
+                       @Value("${auth.jwt.access-token-ttl-seconds}") long accessTokenTtlSeconds,
+                       @Value("${auth.jwt.refresh-token-ttl-seconds}") long refreshTokenTtlSeconds) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.verificationService = verificationService;
+        this.jwtTokenService = jwtTokenService;
+        this.sessionService = sessionService;
+        this.jwtBlacklistService = jwtBlacklistService;
+        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
+        this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
+    }
+
+    public LoginResponse login(LoginRequest request) {
+        User user = userRepository.findByContact(normalizeTarget(request.type(), request.target()));
+        if (user == null || !Integer.valueOf(1).equals(user.getStatus())
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new BusinessException(BUSINESS_ERROR_CODE, "用户名或密码错误");
+        }
+        String jti = UUID.randomUUID().toString();
+        String accessToken = jwtTokenService.generateAccessToken(user.getUid(), jti, accessTokenTtlSeconds);
+        SessionService.Session session = sessionService.create(user.getUid(), jti);
+        return new LoginResponse(user.getUid(), accessToken, session.refreshToken(),
+                accessTokenTtlSeconds, refreshTokenTtlSeconds);
+    }
+
+    public LoginResponse refresh(RefreshTokenRequest request) {
+        String uid = sessionService.uidFrom(request.refreshToken());
+        String jti = UUID.randomUUID().toString();
+        SessionService.Session session = sessionService.rotate(request.refreshToken(), jti);
+        String accessToken = jwtTokenService.generateAccessToken(uid, jti, accessTokenTtlSeconds);
+        return new LoginResponse(uid, accessToken, session.refreshToken(),
+                accessTokenTtlSeconds, refreshTokenTtlSeconds);
+    }
+
+    public void logout(String authorization) {
+        jwtBlacklistService.blacklist(authorization);
+    }
+
+    public void forceLogout(String uid, String authorization) {
+        sessionService.deleteByUid(uid);
+        jwtBlacklistService.blacklist(authorization);
     }
 
     @Transactional
-    public void register(RegisterRequest request) {
-        if (userRepository.findByUsername(request.username()) != null) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "username 已存在");
+    public void registerByContact(VerificationType type, String target, String code, String password) {
+        verificationService.verify(VerificationPurpose.REGISTER, type, target, code);
+        String normalizedTarget = normalizeTarget(type, target);
+        if (userRepository.findByContact(normalizedTarget) != null) {
+            throw new BusinessException(BUSINESS_ERROR_CODE, "联系方式已注册");
         }
 
         LocalDateTime now = LocalDateTime.now();
         User user = new User();
-        user.setUsername(request.username());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setUid(UUID.randomUUID().toString().replace("-", ""));
+        user.setPhone(type == VerificationType.PHONE ? normalizedTarget : null);
+        user.setEmail(type == VerificationType.EMAIL ? normalizedTarget : null);
+        user.setPasswordHash(passwordEncoder.encode(password));
         user.setStatus(1);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
@@ -43,15 +100,11 @@ public class AuthService {
         try {
             userRepository.insert(user);
         } catch (DuplicateKeyException exception) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "username 已存在");
+            throw new BusinessException(BUSINESS_ERROR_CODE, "联系方式已注册");
         }
     }
 
-    public void login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.username());
-        if (user == null || !Integer.valueOf(1).equals(user.getStatus())
-                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "用户名或密码错误");
-        }
+    private String normalizeTarget(VerificationType type, String target) {
+        return type == VerificationType.EMAIL ? target.trim().toLowerCase() : target.trim();
     }
 }
