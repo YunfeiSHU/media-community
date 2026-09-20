@@ -1,25 +1,39 @@
 server:
-  port: 8082
+  port: 8001
 
 dubbo:
   application:
     name: user-service
     qos-enable: ${DUBBO_QOS_ENABLE:false}
-  protocol:
+  protocol: #启动Dubbo协议的RPC服务器，用于PRC服务调用，默认端口为20880
     name: dubbo
-    port: 20881
+    port: -1 # 自动分配可用端口
   registry:
     address: ${NACOS_REGISTRY_ADDRESS:nacos://localhost:8848}
     username: ${NACOS_USERNAME:nacos}
     password: ${NACOS_PASSWORD:nacos}
-    register: true
-    subscribe: true
+    register: true # 注册Nacos服务，默认true：作为服务提供者，把自己的地址注册到注册中心 
+    #服务提供者： 实现 @DubboService的 类，Dubbo默认实现服务注册
+    register-mode: instance
+    # 设置注册模式：
+    # all: 双注册（默认，兼容Dubbo 2.x 接口级注册）
+    # instance: 仅应用级注册（推荐）
+    # interface: 仅接口级注册
+    subscribe: true # 订阅Nacos服务，默认true：作为服务消费者，从注册中心订阅其他服务的地址列表
+    # 服务消费者：@DubboReference 注入的类，Dubbo默认实现服务订阅
   scan:
     base-packages: com.example.userservice.rpc
 
 spring:
   application:
     name: user-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        register-enabled: true
   datasource:
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USERNAME:root}

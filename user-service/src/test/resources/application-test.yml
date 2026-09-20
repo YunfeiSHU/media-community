@@ -1,6 +1,10 @@
 dubbo:
   registry:
     address: N/A
+  provider:
+    token: false
+  protocol:
+    port: -1
 
 spring:
   datasource:
