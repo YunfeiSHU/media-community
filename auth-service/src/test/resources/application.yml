@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+  redis:
+    host: localhost
+    port: 6379
+
+dubbo:
+  application:
+    name: auth-service
+    qos-enable: false
+  registry:
+    enabled: false
+  config-center:
+    enabled: false
+  metadata-report:
+    enabled: false
+  consumer:
+    timeout: 3000
+    check: false
+
+auth:
+  jwt:
+    secret: change-this-secret-to-a-random-value-at-least-32-bytes
+    expiration: 3600000

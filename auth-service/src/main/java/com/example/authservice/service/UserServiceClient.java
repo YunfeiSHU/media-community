@@ -10,7 +10,6 @@ import com.example.userservice.rpc.UserDubboService;
 @Component
 public class UserServiceClient {
     @DubboReference(
-            url = "${user-service.dubbo.url:dubbo://localhost:20880}",
             check = false,
             timeout = 3000
     )

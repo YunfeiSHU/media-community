@@ -1,21 +1,31 @@
 server:
-  port: ${SERVER_PORT:8080}
-
-user-service:
-  dubbo:
-    url: ${USER_SERVICE_DUBBO_URL:dubbo://localhost:20880}
+  port: ${SERVER_PORT:8002}
 
 dubbo:
   application:
     name: auth-service
     qos-enable: ${DUBBO_QOS_ENABLE:false}
   registry:
-    address: N/A
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+  metadata-report:
+    address: ${DUBBO_METADATA_REPORT_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
   consumer:
     timeout: ${DUBBO_TIMEOUT:3000}
     check: false
 
 spring:
+  application:
+    name: auth-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
   sql:
     init:
       mode: ${SPRING_SQL_INIT_MODE:always}

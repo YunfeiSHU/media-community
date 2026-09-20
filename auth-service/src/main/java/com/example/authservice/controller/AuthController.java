@@ -64,8 +64,10 @@ public class AuthController {
     @PostMapping("/verification/send")
     public ApiResponse<VerificationInfo> sendVerification(@Valid @RequestBody SendVerificationRequest request) {
         String code = verificationService.send(request.purpose(), request.type(), request.target());
-        return ApiResponse.success(new VerificationInfo(request.purpose().name().toLowerCase(),
-                request.type().name().toLowerCase(), request.target(), code));
+        // For email, code is null (sent via email for security). For phone, code is returned.
+        VerificationInfo info = new VerificationInfo(request.purpose().name().toLowerCase(),
+                request.type().name().toLowerCase(), request.target(), code);
+        return ApiResponse.success(info);
     }
 
     @PostMapping("/register/phone")

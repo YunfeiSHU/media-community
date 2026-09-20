@@ -40,7 +40,7 @@ public class VerificationService {
         String codeKey = codeKey(purpose, type, normalizedTarget);
         redisTemplate.opsForValue().set(codeKey, code, CODE_TTL);
         redisTemplate.opsForValue().set(cooldownKey, "1", COOLDOWN);
-        return type == VerificationType.PHONE ? code : null;
+        return code;
     }
 
     public void verify(VerificationPurpose purpose, VerificationType type, String target, String code) {
