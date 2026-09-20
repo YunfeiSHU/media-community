@@ -21,6 +21,7 @@
         <mybatis-spring-boot.version>3.0.3</mybatis-spring-boot.version>
         <jjwt.version>0.12.6</jjwt.version>
         <testcontainers.version>1.19.8</testcontainers.version>
+        <dubbo.version>3.3.0</dubbo.version>
     </properties>
 
     <dependencyManagement>
@@ -46,11 +47,20 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo-spring-boot-starter</artifactId>
+            <version>${dubbo.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

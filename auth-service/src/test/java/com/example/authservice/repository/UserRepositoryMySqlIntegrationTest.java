@@ -29,7 +29,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-import com.example.authservice.entity.User;
+import com.example.authservice.entity.Account;
 
 @Testcontainers(disabledWithoutDocker = true)
 @MybatisTest
@@ -53,7 +53,7 @@ class UserRepositoryMySqlIntegrationTest {
     }
 
     @Autowired
-    private UserRepository userRepository;
+    private AccountRepository userRepository;
 
     @Autowired
     private DataSource dataSource;
@@ -66,10 +66,10 @@ class UserRepositoryMySqlIntegrationTest {
 
     @Test
     void insertsAndReadsPhoneUserFromRealMySql() {
-        User user = user("uid-phone-001", "13800138000", null, 1);
+        Account user = user("uid-phone-001", "13800138000", null, 1);
 
         assertEquals(1, userRepository.insert(user));
-        User loaded = userRepository.findByContact("13800138000");
+        Account loaded = userRepository.findByContact("13800138000");
 
         assertNotNull(loaded);
         assertEquals("uid-phone-001", loaded.getUid());
@@ -94,7 +94,7 @@ class UserRepositoryMySqlIntegrationTest {
     void readsDisabledUserButApplicationCanRejectItByStatus() {
         userRepository.insert(user("uid-disabled-001", "13800138003", null, 0));
 
-        User loaded = userRepository.findByContact("13800138003");
+        Account loaded = userRepository.findByContact("13800138003");
 
         assertNotNull(loaded);
         assertEquals(0, loaded.getStatus());
@@ -143,8 +143,8 @@ class UserRepositoryMySqlIntegrationTest {
         }
     }
 
-    private User user(String uid, String phone, String email, int status) {
-        User user = new User();
+    private Account user(String uid, String phone, String email, int status) {
+        Account user = new Account();
         user.setUid(uid);
         user.setPhone(phone);
         user.setEmail(email);

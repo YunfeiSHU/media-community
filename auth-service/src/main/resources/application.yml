@@ -1,19 +1,47 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+
+user-service:
+  dubbo:
+    url: ${USER_SERVICE_DUBBO_URL:dubbo://localhost:20880}
+
+dubbo:
+  application:
+    name: auth-service
+    qos-enable: ${DUBBO_QOS_ENABLE:false}
+  registry:
+    address: N/A
+  consumer:
+    timeout: ${DUBBO_TIMEOUT:3000}
+    check: false
 
 spring:
   sql:
     init:
-      mode: always
+      mode: ${SPRING_SQL_INIT_MODE:always}
   datasource:
-    url: jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: ***REMOVED***
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:***REMOVED***}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name:auth-service}
 
 mybatis:
   configuration:
@@ -21,9 +49,9 @@ mybatis:
 
 auth:
   jwt:
-    secret: change-this-secret-to-a-random-value-at-least-32-bytes
-    access-token-ttl-seconds: 1800
-    refresh-token-ttl-seconds: 604800
+    secret: ${AUTH_JWT_SECRET:change-this-secret-to-a-random-value-at-least-32-bytes}
+    access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:1800}
+    refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:604800}
   login-rate-limit:
-    max-attempts: 5
-    window-seconds: 60
+    max-attempts: ${AUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:5}
+    window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:60}

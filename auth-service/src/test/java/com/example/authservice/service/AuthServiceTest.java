@@ -20,16 +20,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.example.authservice.dto.LoginRequest;
 import com.example.authservice.dto.LoginResponse;
 import com.example.authservice.dto.RefreshTokenRequest;
-import com.example.authservice.entity.User;
+import com.example.authservice.entity.Account;
 import com.example.authservice.exception.BusinessException;
-import com.example.authservice.repository.UserRepository;
+import com.example.authservice.repository.AccountRepository;
 import com.example.authservice.verification.enums.VerificationType;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
     @Mock
-    private UserRepository userRepository;
+    private AccountRepository userRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -56,7 +56,7 @@ class AuthServiceTest {
 
     @Test
     void loginReturnsAccessAndRefreshTokensForValidUser() {
-        User user = enabledUser("uid-100", "user@example.com");
+        Account user = enabledUser("uid-100", "user@example.com");
         when(userRepository.findByContact("user@example.com")).thenReturn(user);
         when(passwordEncoder.matches("Abc123456", "encoded-password")).thenReturn(true);
         when(jwtTokenService.generateAccessToken(eq("uid-100"), any(String.class), eq(1800L)))
@@ -76,7 +76,7 @@ class AuthServiceTest {
 
     @Test
     void loginRejectsInvalidPasswordWithoutCreatingSession() {
-        User user = enabledUser("uid-100", "user@example.com");
+        Account user = enabledUser("uid-100", "user@example.com");
         when(userRepository.findByContact("user@example.com")).thenReturn(user);
         when(passwordEncoder.matches("wrong", "encoded-password")).thenReturn(false);
 
@@ -98,9 +98,9 @@ class AuthServiceTest {
                 "123456", "Abc123456");
 
         verify(verificationService).verify(any(), any(), anyString(), anyString());
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        ArgumentCaptor<Account> userCaptor = ArgumentCaptor.forClass(Account.class);
         verify(userRepository).insert(userCaptor.capture());
-        User savedUser = userCaptor.getValue();
+        Account savedUser = userCaptor.getValue();
         assertNotNull(savedUser.getUid());
         assertEquals(32, savedUser.getUid().length());
         assertEquals("13800138000", savedUser.getPhone());
@@ -139,8 +139,8 @@ class AuthServiceTest {
         verify(jwtBlacklistService).blacklist("Bearer access-token");
     }
 
-    private User enabledUser(String uid, String email) {
-        User user = new User();
+    private Account enabledUser(String uid, String email) {
+        Account user = new Account();
         user.setUid(uid);
         user.setEmail(email);
         user.setPasswordHash("encoded-password");

@@ -2,6 +2,16 @@
 
 基于 Java、Spring Boot、MyBatis 和 MySQL 的登录注册服务。
 
+## Kubernetes 基础设施
+
+项目包含 Traefik、Kubernetes Service 和 Envoy sidecar 的基础部署清单，入口和部署步骤见 [infra/k8s/README.md](infra/k8s/README.md)。
+
+容器镜像可以使用以下命令构建：
+
+```powershell
+docker build -t auth-service:local .
+```
+
 ## 启动前准备
 
 1. 创建数据库：`CREATE DATABASE auth_service DEFAULT CHARACTER SET utf8mb4;`

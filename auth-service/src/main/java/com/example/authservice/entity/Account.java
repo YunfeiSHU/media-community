@@ -2,7 +2,7 @@ package com.example.authservice.entity;
 
 import java.time.LocalDateTime;
 
-public class User {
+public class Account {
 
     private Long id;
     private String uid;
