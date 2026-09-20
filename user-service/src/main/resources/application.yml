@@ -1,12 +1,13 @@
 server:
-  port: 8080
+  port: 8082
 
 dubbo:
   application:
     name: user-service
+    qos-enable: ${DUBBO_QOS_ENABLE:false}
   protocol:
     name: dubbo
-    port: 20880
+    port: 20881
   registry:
     address: N/A
   scan:
@@ -16,9 +17,9 @@ spring:
   application:
     name: user-service
   datasource:
-    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/user_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:root}
+    password: ${MYSQL_PASSWORD:***REMOVED***}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:

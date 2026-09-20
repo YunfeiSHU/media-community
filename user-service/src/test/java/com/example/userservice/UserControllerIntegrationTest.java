@@ -7,16 +7,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import com.example.userservice.repository.UserRepository;
-import com.example.userservice.entity.User;
-import com.example.userservice.rpc.CreateUserCommand;
-import com.example.userservice.rpc.RpcUser;
-import com.example.userservice.rpc.UserDubboService;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.example.userservice.entity.User;
+import com.example.userservice.repository.UserRepository;
+import com.example.userservice.rpc.CreateUserCommand;
+import com.example.userservice.rpc.RpcUser;
+import com.example.userservice.rpc.UserDubboService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -40,34 +40,34 @@ class UserControllerIntegrationTest {
 
     @Test
     void userCanOnlyDeleteOwnAccount() throws Exception {
-        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", "1"))
+        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", "demo"))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", "1"))
+        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", "demo"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DELETED"));
     }
 
     @Test
     void updatesOwnProfileAndReadsStatus() throws Exception {
-        long userId = createUser("profile-user", "原昵称");
+                User user = createUser("profile-user", "原昵称");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/users/me")
-                        .header("X-User-Id", userId)
+                                                .header("X-User-Id", user.getUid())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nickname\":\"新昵称\",\"bio\":\"简介\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nickname").value("新昵称"))
                 .andExpect(jsonPath("$.bio").value("简介"));
 
-        mockMvc.perform(get("/api/v1/admin/users/{userId}", userId).header("X-User-Role", "ADMIN"))
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId()).header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("NORMAL"));
     }
 
     @Test
     void adminCanChangeStatusButNormalUserCannot() throws Exception {
-        long userId = createUser("status-user", "状态用户");
+                long userId = createUser("status-user", "状态用户").getId();
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/admin/users/{userId}/status", userId)
                         .header("X-User-Id", "1")
@@ -113,7 +113,7 @@ class UserControllerIntegrationTest {
                 .get("missing-uid"));
     }
 
-    private long createUser(String username, String nickname) {
+        private User createUser(String username, String nickname) {
         User user = new User();
         user.setUid(username);
         user.setNickname(nickname);
@@ -121,6 +121,6 @@ class UserControllerIntegrationTest {
         user.setCreatedAt(java.time.LocalDateTime.now());
         user.setUpdatedAt(java.time.LocalDateTime.now());
         userRepository.insert(user);
-        return user.getUserId();
+        return user;
     }
 }

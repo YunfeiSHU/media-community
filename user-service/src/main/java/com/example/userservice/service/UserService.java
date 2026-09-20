@@ -87,12 +87,22 @@ public class UserService {
     }
 
     @Transactional
+    public User updateProfileByUid(String uid, UserUpdateRequest request) {
+        return updateProfile(getRequiredByUid(uid).getId(), request);
+    }
+
+    @Transactional
     public User updateStatus(Long userId, UserStatus status) {
         User user = getRequired(userId);
         userRepository.updateStatus(userId, status, LocalDateTime.now());
         user.setStatus(status);
         user.setUpdatedAt(LocalDateTime.now());
         return user;
+    }
+
+    @Transactional
+    public User updateStatusByUid(String uid, UserStatus status) {
+        return updateStatus(getRequiredByUid(uid).getId(), status);
     }
 
     public boolean exists(Long userId) {
