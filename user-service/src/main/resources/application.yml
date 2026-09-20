@@ -9,7 +9,11 @@ dubbo:
     name: dubbo
     port: 20881
   registry:
-    address: N/A
+    address: ${NACOS_REGISTRY_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+    register: true
+    subscribe: true
   scan:
     base-packages: com.example.userservice.rpc
 

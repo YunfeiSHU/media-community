@@ -20,6 +20,7 @@
         <java.version>17</java.version>
         <mybatis-spring-boot.version>3.0.4</mybatis-spring-boot.version>
         <dubbo.version>3.3.0</dubbo.version>
+        <nacos.version>2.3.0</nacos.version>
     </properties>
 
     <dependencies>
@@ -40,6 +41,11 @@
             <groupId>org.apache.dubbo</groupId>
             <artifactId>dubbo-spring-boot-starter</artifactId>
             <version>${dubbo.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.nacos</groupId>
+            <artifactId>nacos-client</artifactId>
+            <version>${nacos.version}</version>
         </dependency>
         <dependency>
             <groupId>com.mysql</groupId>
