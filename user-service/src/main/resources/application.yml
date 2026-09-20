@@ -1,0 +1,34 @@
+server:
+  port: 8080
+
+dubbo:
+  application:
+    name: user-service
+  protocol:
+    name: dubbo
+    port: 20880
+  registry:
+    address: N/A
+  scan:
+    base-packages: com.example.userservice.rpc
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/user_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+  type-handlers-package: com.example.userservice.repository
+
+logging:
+  level:
+    com.example.userservice.repository: debug

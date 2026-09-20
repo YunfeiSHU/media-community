@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS `user` (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uid VARCHAR(32) NOT NULL UNIQUE,
+    nickname VARCHAR(64),
+    avatar VARCHAR(512),
+    gender TINYINT,
+    bio VARCHAR(255),
+    status TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
