@@ -27,6 +27,7 @@ import reactor.core.publisher.Mono;
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
 
@@ -71,8 +72,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
             ServerHttpRequest mutatedRequest = request.mutate()
                     .headers(headers -> {
+                        headers.remove(REQUEST_ID_HEADER);
                         headers.remove(USER_ID_HEADER);
                         headers.remove(USER_ROLE_HEADER);
+                        String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
+                        if (StringUtils.hasText(requestId)) {
+                            headers.set(REQUEST_ID_HEADER, requestId);
+                        }
                         headers.remove("X-User-Id");
                         headers.remove("X-User-Role");
                         headers.set(USER_ID_HEADER, resolvedUserId);

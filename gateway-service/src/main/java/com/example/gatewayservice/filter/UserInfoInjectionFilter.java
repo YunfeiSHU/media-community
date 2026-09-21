@@ -18,17 +18,17 @@ public class UserInfoInjectionFilter extends AbstractGatewayFilterFactory<UserIn
             ServerHttpRequest request = exchange.getRequest();
             
             // 从请求头获取用户信息（JWT认证过滤器已经注入）
-            String userId = request.getHeaders().getFirst("X-User-Id");
+            String uid = request.getHeaders().getFirst("X-User-Id");
             String userRole = request.getHeaders().getFirst("X-User-Role");
             
             // 如果没有用户信息，说明未认证，放行给后续处理
-            if (userId == null) {
+            if (uid == null) {
                 return chain.filter(exchange);
             }
             
             // 构建新请求，确保下游服务能获取到用户信息
             ServerHttpRequest newRequest = request.mutate()
-                    .header("X-User-Id", userId)
+                    .header("X-User-Id", uid)
                     .header("X-User-Role", userRole != null ? userRole : "user")
                     .build();
             
