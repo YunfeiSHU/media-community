@@ -7,10 +7,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -103,6 +106,53 @@ class GatewayFilterTests {
     }
 
     @Test
+    void jwtFilter_shouldRejectBlacklistedToken() {
+        String token = Jwts.builder()
+                .id("jti-blacklisted")
+                .subject("u-1001")
+                .issuer(gatewayAuthProperties.getJwt().getIssuer())
+                .audience().add(gatewayAuthProperties.getJwt().getAudience()).and()
+                .claim(gatewayAuthProperties.getJwt().getRoleClaim(), "admin")
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
+                .compact();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(redisBlacklistService.isBlacklisted("jti-blacklisted")).thenReturn(Mono.just(true));
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    void jwtFilter_shouldPassWhenJtiNotBlacklisted() {
+        String token = Jwts.builder()
+                .id("jti-normal")
+                .subject("u-1001")
+                .issuer(gatewayAuthProperties.getJwt().getIssuer())
+                .audience().add(gatewayAuthProperties.getJwt().getAudience()).and()
+                .claim(gatewayAuthProperties.getJwt().getRoleClaim(), "user")
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
+                .compact();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+        when(redisBlacklistService.isBlacklisted("jti-normal")).thenReturn(Mono.just(false));
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(redisBlacklistService).isBlacklisted("jti-normal");
+        verify(chain).filter(any());
+    }
+
+    @Test
     void requestIdFilter_shouldReuseIncomingRequestId() {
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.get("/api/v1/users/me")
@@ -145,13 +195,17 @@ class GatewayFilterTests {
         when(chain.filter(any())).thenReturn(Mono.empty());
 
         // 模拟 Redis 脚本返回 1（令牌可用）
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString()))
-                .thenReturn(Flux.just(1L));
+        stubRateLimitScript(redisTemplate, Flux.just(1L));
 
         StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
         verify(chain).filter(exchange);
         assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        // 全局限流使用固定单 key，与请求路径无关
+        verify(redisTemplate).execute(
+                ArgumentMatchers.<RedisScript<Long>>any(),
+                eq(List.of("gateway:rate:global")),
+                anyString(), anyString(), anyString());
     }
 
     @Test
@@ -165,12 +219,12 @@ class GatewayFilterTests {
         GatewayFilterChain chain = mock(GatewayFilterChain.class);
 
         // 模拟 Redis 脚本返回 0（无令牌）
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString()))
-                .thenReturn(Flux.just(0L));
+        stubRateLimitScript(redisTemplate, Flux.just(0L));
 
         StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        verify(chain, never()).filter(any());
     }
 
     @Test
@@ -185,8 +239,7 @@ class GatewayFilterTests {
         when(chain.filter(any())).thenReturn(Mono.empty());
 
         // 模拟 Redis 异常
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString()))
-                .thenReturn(Flux.error(new RuntimeException("Redis connection error")));
+        stubRateLimitScript(redisTemplate, Flux.error(new RuntimeException("Redis connection error")));
 
         StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
@@ -208,12 +261,16 @@ class GatewayFilterTests {
         when(chain.filter(any())).thenReturn(Mono.empty());
 
         // 模拟 Redis 脚本返回 1（令牌可用）
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString()))
-                .thenReturn(Flux.just(1L));
+        stubRateLimitScript(redisTemplate, Flux.just(1L));
 
         StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
         verify(chain).filter(exchange);
+        // X-Forwarded-For 含多个 IP 时应取第一个，限流 key 必须落在该 IP 上
+        verify(redisTemplate).execute(
+                ArgumentMatchers.<RedisScript<Long>>any(),
+                eq(List.of("gateway:rate:ip:192.168.1.100")),
+                anyString(), anyString(), anyString());
     }
 
     @Test
@@ -230,12 +287,16 @@ class GatewayFilterTests {
         when(chain.filter(any())).thenReturn(Mono.empty());
 
         // 模拟 Redis 脚本返回 1（令牌可用）
-        when(redisTemplate.execute(any(RedisScript.class), anyList(), anyString(), anyString(), anyString()))
-                .thenReturn(Flux.just(1L));
+        stubRateLimitScript(redisTemplate, Flux.just(1L));
 
         StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
         verify(chain).filter(exchange);
+        // 无代理头时应回退到 TCP 连接对端地址
+        verify(redisTemplate).execute(
+                ArgumentMatchers.<RedisScript<Long>>any(),
+                eq(List.of("gateway:rate:ip:127.0.0.1")),
+                anyString(), anyString(), anyString());
     }
 
     @Test
@@ -264,5 +325,24 @@ class GatewayFilterTests {
                 .claim(gatewayAuthProperties.getJwt().getRoleClaim(), role)
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
                 .compact();
+    }
+
+    /**
+     * 统一 stub 限流 Lua 脚本的返回值。
+     *
+     * <p>使用 {@code ArgumentMatchers.<RedisScript<Long>>any()} 显式给出类型参数，
+     * 避免裸类型 {@code RedisScript.class} 使 {@code execute(...)} 与 {@code when(...)}
+     * 的类型推断退化为 raw type（raw {@code RedisScript}、raw {@code Flux}、raw
+     * {@code OngoingStubbing}），从而产生一连串 unchecked 告警。</p>
+     *
+     * @param redisTemplate 被测过滤器持有的 Redis 模板 mock
+     * @param scriptResult  脚本返回的令牌判定结果，1 表示放行、0 表示限流，异常表示 Redis 故障
+     */
+    private void stubRateLimitScript(ReactiveStringRedisTemplate redisTemplate, Flux<Long> scriptResult) {
+        when(redisTemplate.execute(
+                ArgumentMatchers.<RedisScript<Long>>any(),
+                anyList(),
+                anyString(), anyString(), anyString()))
+                .thenReturn(scriptResult);
     }
 }
