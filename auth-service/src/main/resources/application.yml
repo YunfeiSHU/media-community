@@ -65,3 +65,10 @@ auth:
   login-rate-limit:
     max-attempts: ${AUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:5}
     window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:60}
+
+
+logging:
+  level:
+    root: INFO
+    com.example.authservice: DEBUG
+    com.example.authservice.repository: DEBUG
