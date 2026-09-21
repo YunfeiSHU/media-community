@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 
 import com.example.gatewayservice.config.GatewayAuthProperties;
+import com.example.gatewayservice.service.RedisBlacklistService;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
@@ -34,9 +35,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final String USER_ROLE_HEADER = "X-User-Role";
 
     private final GatewayAuthProperties gatewayAuthProperties;
+    private final RedisBlacklistService redisBlacklistService;
 
-    public JwtAuthenticationFilter(GatewayAuthProperties gatewayAuthProperties) {
+    public JwtAuthenticationFilter(GatewayAuthProperties gatewayAuthProperties,
+                                   RedisBlacklistService redisBlacklistService) {
         this.gatewayAuthProperties = gatewayAuthProperties;
+        this.redisBlacklistService = redisBlacklistService;
     }
 
     @Override
@@ -79,34 +83,52 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 userRole = "user";
             }
 
-            final String resolvedUid = userId;
-            final String resolvedRole = userRole;
+            final String finalUserRole = userRole;
+            String jti = claims.getId();
+            if (StringUtils.hasText(jti)) {
+                return redisBlacklistService.isBlacklisted(jti)
+                        .flatMap(blacklisted -> {
+                            if (blacklisted) {
+                                return unauthorized(exchange, "Token has been blacklisted");
+                            }
+                            return proceedWithRequest(exchange, chain, request, userId, finalUserRole);
+                        });
+            }
 
-            ServerHttpRequest mutatedRequest = request.mutate()
-                    .headers(headers -> {
-                        headers.remove(REQUEST_ID_HEADER);
-                        String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
-                        if (StringUtils.hasText(requestId)) {
-                            headers.set(REQUEST_ID_HEADER, requestId);
-                        }
-                        headers.remove(UID_HEADER);
-                        headers.remove(USER_ID_HEADER);
-                        headers.remove(USER_ROLE_HEADER);
-                        headers.set(UID_HEADER, resolvedUid);
-                        headers.set(USER_ID_HEADER, resolvedUid);
-                        headers.set(USER_ROLE_HEADER, resolvedRole);
-                    })
-                    .build();
-
-            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+            return proceedWithRequest(exchange, chain, request, userId, finalUserRole);
         } catch (JwtException | IllegalArgumentException ex) {
             return unauthorized(exchange, "Invalid JWT token");
         }
     }
 
+    private Mono<Void> proceedWithRequest(ServerWebExchange exchange, GatewayFilterChain chain,
+                                          ServerHttpRequest request, String userId, String userRole) {
+        final String resolvedUid = userId;
+        final String resolvedRole = userRole;
+
+        ServerHttpRequest mutatedRequest = request.mutate()
+                .headers(headers -> {
+                    headers.remove(REQUEST_ID_HEADER);
+                    String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
+                    if (StringUtils.hasText(requestId)) {
+                        headers.set(REQUEST_ID_HEADER, requestId);
+                    }
+                    headers.remove(UID_HEADER);
+                    headers.remove(USER_ID_HEADER);
+                    headers.remove(USER_ROLE_HEADER);
+                    headers.set(UID_HEADER, resolvedUid);
+                    headers.set(USER_ID_HEADER, resolvedUid);
+                    headers.set(USER_ROLE_HEADER, resolvedRole);
+                })
+                .build();
+
+        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+    }
+
     @Override
     public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE;
+        // 在 IP 限流之后执行
+        return Ordered.HIGHEST_PRECEDENCE + 2;
     }
 
     private boolean isPermitAll(String path) {

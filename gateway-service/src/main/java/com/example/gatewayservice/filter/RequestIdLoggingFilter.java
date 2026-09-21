@@ -73,6 +73,7 @@ public class RequestIdLoggingFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
+        // 在全局限流之后执行
         return Ordered.HIGHEST_PRECEDENCE + 1;
     }
 

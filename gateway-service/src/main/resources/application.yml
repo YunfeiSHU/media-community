@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: gateway-service
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
   cloud:
     nacos:
       discovery:
@@ -60,6 +64,23 @@ gateway:
       user-id-claim: sub
       # 从 token 中提取角色的 claim 名
       role-claim: role
+  rate-limit:
+    # 全局限流配置
+    global-limit:
+      # Redis key 前缀
+      key-prefix: ${GATEWAY_RATE_LIMIT_GLOBAL_KEY_PREFIX:gateway:rate:global}
+      # 每秒补充的令牌数
+      replenish-rate: ${GATEWAY_RATE_LIMIT_GLOBAL_REPLENISH_RATE:10000}
+      # 最大令牌数（容量）
+      burst-capacity: ${GATEWAY_RATE_LIMIT_GLOBAL_BURST_CAPACITY:10000}
+    # IP 限流配置
+    ip-limit:
+      # Redis key 前缀
+      key-prefix: ${GATEWAY_RATE_LIMIT_IP_KEY_PREFIX:gateway:rate:ip}
+      # 每秒补充的令牌数
+      replenish-rate: ${GATEWAY_RATE_LIMIT_IP_REPLENISH_RATE:100}
+      # 最大令牌数（容量）
+      burst-capacity: ${GATEWAY_RATE_LIMIT_IP_BURST_CAPACITY:100}
 
 management:
   endpoints:
