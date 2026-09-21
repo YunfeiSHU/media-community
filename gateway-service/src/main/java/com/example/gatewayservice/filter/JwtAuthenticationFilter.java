@@ -2,6 +2,7 @@ package com.example.gatewayservice.filter;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Set;
 
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -28,6 +29,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String UID_HEADER = "uid";
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLE_HEADER = "X-User-Role";
 
@@ -53,35 +55,45 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         try {
             Claims claims = parseClaims(token);
+            if (!gatewayAuthProperties.getJwt().getIssuer().equals(claims.getIssuer())) {
+                return unauthorized(exchange, "Invalid JWT issuer");
+            }
+
+            Set<String> audience = claims.getAudience();
+            if (audience == null || !audience.contains(gatewayAuthProperties.getJwt().getAudience())) {
+                return unauthorized(exchange, "Invalid JWT audience");
+            }
+
             Date expiration = claims.getExpiration();
             if (expiration != null && expiration.before(new Date())) {
                 return unauthorized(exchange, "Token expired");
             }
 
-            String userId = claims.get(gatewayAuthProperties.getJwt().getUserIdClaim(), String.class);
+            String userId = claims.getSubject();
             if (!StringUtils.hasText(userId)) {
-                userId = claims.getSubject();
-            }
-            String role = claims.get(gatewayAuthProperties.getJwt().getRoleClaim(), String.class);
-            if (!StringUtils.hasText(role)) {
-                role = "user";
+                return unauthorized(exchange, "Missing uid in subject");
             }
 
-            final String resolvedUserId = userId;
-            final String resolvedRole = role;
+            String userRole = claims.get(gatewayAuthProperties.getJwt().getRoleClaim(), String.class);
+            if (!StringUtils.hasText(userRole)) {
+                userRole = "user";
+            }
+
+            final String resolvedUid = userId;
+            final String resolvedRole = userRole;
 
             ServerHttpRequest mutatedRequest = request.mutate()
                     .headers(headers -> {
                         headers.remove(REQUEST_ID_HEADER);
-                        headers.remove(USER_ID_HEADER);
-                        headers.remove(USER_ROLE_HEADER);
                         String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
                         if (StringUtils.hasText(requestId)) {
                             headers.set(REQUEST_ID_HEADER, requestId);
                         }
-                        headers.remove("X-User-Id");
-                        headers.remove("X-User-Role");
-                        headers.set(USER_ID_HEADER, resolvedUserId);
+                        headers.remove(UID_HEADER);
+                        headers.remove(USER_ID_HEADER);
+                        headers.remove(USER_ROLE_HEADER);
+                        headers.set(UID_HEADER, resolvedUid);
+                        headers.set(USER_ID_HEADER, resolvedUid);
                         headers.set(USER_ROLE_HEADER, resolvedRole);
                     })
                     .build();

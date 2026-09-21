@@ -36,8 +36,14 @@ public class GatewayAuthProperties {
         /** 签名密钥，HS256 要求至少 32 字节 */
         private String secret;
 
+        /** 允许的签发方 */
+        private String issuer = "auth-service";
+
+        /** 允许的受众 */
+        private String audience = "api";
+
         /** 用户 ID 所在的 claim 名 */
-        private String userIdClaim = "sub";
+        private String userIdClaim = "uid";
 
         /** 角色所在的 claim 名 */
         private String roleClaim = "role";
@@ -48,6 +54,22 @@ public class GatewayAuthProperties {
 
         public void setSecret(String secret) {
             this.secret = secret;
+        }
+
+        public String getIssuer() {
+            return issuer;
+        }
+
+        public void setIssuer(String issuer) {
+            this.issuer = issuer;
+        }
+
+        public String getAudience() {
+            return audience;
+        }
+
+        public void setAudience(String audience) {
+            this.audience = audience;
         }
 
         public String getUserIdClaim() {
