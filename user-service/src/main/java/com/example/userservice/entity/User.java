@@ -9,7 +9,8 @@ public class User {
     private String avatar;
     private String gender;
     private String bio;
-    private UserStatus status;
+    private Integer role;
+    private Integer status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -29,8 +30,26 @@ public class User {
     public void setGender(String gender) { this.gender = gender; }
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
-    public UserStatus getStatus() { return status; }
-    public void setStatus(UserStatus status) { this.status = status; }
+
+    public Integer getRole() { return role; }
+    public void setRole(Integer role) { this.role = role; }
+
+    public UserRole getRoleEnum() {
+        return UserRole.fromCode(role);
+    }
+    public void setRoleEnum(UserRole roleEnum) {
+        this.role = roleEnum != null ? roleEnum.getCode() : UserRole.USER.getCode();
+    }
+
+    public Integer getStatus() { return status; }
+    public void setStatus(Integer status) { this.status = status; }
+
+    public UserStatus getStatusEnum() {
+        return UserStatus.fromCode(status);
+    }
+    public void setStatusEnum(UserStatus statusEnum) {
+        this.status = statusEnum != null ? statusEnum.getCode() : UserStatus.NORMAL.getCode();
+    }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

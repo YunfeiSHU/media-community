@@ -46,7 +46,6 @@ spring:
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
-  type-handlers-package: com.example.userservice.repository
 
 logging:
   level:

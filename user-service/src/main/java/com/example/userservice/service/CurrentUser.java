@@ -7,15 +7,22 @@ public final class CurrentUser {
     }
 
     public static String uid(HttpServletRequest request) {
-        String value = request.getHeader("X-User-Id");
+        String value = request.getHeader("uid");
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("missing X-User-Id header");
+            value = request.getHeader("X-User-Id");
+        }
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("missing uid header");
         }
         return value;
     }
 
     public static void requireAdmin(HttpServletRequest request) {
-        if (!"ADMIN".equalsIgnoreCase(request.getHeader("X-User-Role"))) {
+        String role = request.getHeader("X-User-Role");
+        if (role == null || role.isBlank()) {
+            throw new SecurityException("admin role required");
+        }
+        if (!"ADMIN".equalsIgnoreCase(role)) {
             throw new SecurityException("admin role required");
         }
     }

@@ -11,6 +11,8 @@ import java.util.stream.Collectors;
 import org.apache.dubbo.config.annotation.DubboService;
 
 import com.example.userservice.entity.User;
+import com.example.userservice.entity.UserRole;
+import com.example.userservice.entity.UserStatus;
 import com.example.userservice.service.UserService;
 
 @DubboService
@@ -32,7 +34,8 @@ public class UserDubboServiceImpl implements UserDubboService {
         user.setAvatar(command.getAvatar());
         user.setGender(command.getGender());
         user.setBio(command.getBio());
-        user.setStatus(com.example.userservice.entity.UserStatus.NORMAL);
+        user.setRole(UserRole.USER.getCode());
+        user.setStatusEnum(UserStatus.NORMAL);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(user.getCreatedAt());
         userService.insertForRpc(user);

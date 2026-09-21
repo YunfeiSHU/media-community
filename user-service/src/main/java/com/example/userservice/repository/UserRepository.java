@@ -10,14 +10,13 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import com.example.userservice.entity.User;
-import com.example.userservice.entity.UserStatus;
 
 @Mapper
 public interface UserRepository {
 
     @Insert("""
-            INSERT INTO `user` (uid, nickname, avatar, gender, bio, status, created_at, updated_at)
-            VALUES (#{uid}, #{nickname}, #{avatar}, #{gender}, #{bio}, #{status}, #{createdAt}, #{updatedAt})
+            INSERT INTO `user` (uid, nickname, avatar, gender, bio, role, status, created_at, updated_at)
+            VALUES (#{uid}, #{nickname}, #{avatar}, #{gender}, #{bio}, #{role}, #{status,jdbcType=TINYINT}, #{createdAt}, #{updatedAt})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insert(User user);
@@ -44,8 +43,8 @@ public interface UserRepository {
             """)
     int updateProfile(User user);
 
-        @Update("UPDATE `user` SET status = #{status}, updated_at = #{updatedAt} WHERE id = #{userId}")
-    int updateStatus(Long userId, UserStatus status, LocalDateTime updatedAt);
+        @Update("UPDATE `user` SET status = #{status,jdbcType=TINYINT}, updated_at = #{updatedAt} WHERE id = #{userId}")
+    int updateStatus(Long userId, Integer status, LocalDateTime updatedAt);
 
         @Select("SELECT COUNT(1) > 0 FROM `user` WHERE id = #{userId}")
     boolean existsById(Long userId);

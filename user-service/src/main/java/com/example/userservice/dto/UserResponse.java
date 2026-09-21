@@ -1,9 +1,9 @@
 package com.example.userservice.dto;
 
+import java.time.LocalDateTime;
+
 import com.example.userservice.entity.User;
 import com.example.userservice.entity.UserStatus;
-
-import java.time.LocalDateTime;
 
 public record UserResponse(
         Long userId,
@@ -18,6 +18,6 @@ public record UserResponse(
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(user.getUserId(), user.getUsername(), user.getNickname(), user.getAvatar(),
-                user.getGender(), user.getBio(), user.getStatus(), user.getCreatedAt(), user.getUpdatedAt());
+                user.getGender(), user.getBio(), user.getStatusEnum(), user.getCreatedAt(), user.getUpdatedAt());
     }
 }

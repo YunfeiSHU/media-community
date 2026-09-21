@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     avatar VARCHAR(512),
     gender TINYINT,
     bio VARCHAR(255),
+    role TINYINT NOT NULL DEFAULT 1,
     status TINYINT NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL

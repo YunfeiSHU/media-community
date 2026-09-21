@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.userservice.dto.UserResponse;
 import com.example.userservice.dto.UserStatusRequest;
 import com.example.userservice.dto.UserUpdateRequest;
+import com.example.userservice.entity.UserStatus;
 import com.example.userservice.service.CurrentUser;
 import com.example.userservice.service.UserService;
 
@@ -39,7 +40,7 @@ public class UserController {
 
     @DeleteMapping("/users/me")
     public org.springframework.http.ResponseEntity<Void> deleteMe(HttpServletRequest request) {
-        userService.updateStatusByUid(CurrentUser.uid(request), com.example.userservice.entity.UserStatus.DELETED);
+        userService.updateStatusByUid(CurrentUser.uid(request), UserStatus.DELETED);
         return org.springframework.http.ResponseEntity.noContent().build();
     }
 

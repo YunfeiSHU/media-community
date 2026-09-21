@@ -33,7 +33,7 @@ public class UserService {
         user.setAvatar(request.avatar());
         user.setGender(request.gender());
         user.setBio(request.bio());
-        user.setStatus(UserStatus.NORMAL);
+        user.setStatusEnum(UserStatus.NORMAL);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         try {
@@ -94,8 +94,8 @@ public class UserService {
     @Transactional
     public User updateStatus(Long userId, UserStatus status) {
         User user = getRequired(userId);
-        userRepository.updateStatus(userId, status, LocalDateTime.now());
-        user.setStatus(status);
+        userRepository.updateStatus(userId, status.getCode(), LocalDateTime.now());
+        user.setStatusEnum(status);
         user.setUpdatedAt(LocalDateTime.now());
         return user;
     }

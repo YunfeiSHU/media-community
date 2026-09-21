@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.userservice.entity.User;
+import com.example.userservice.entity.UserRole;
+import com.example.userservice.entity.UserStatus;
 import com.example.userservice.repository.UserRepository;
 import com.example.userservice.rpc.CreateUserCommand;
 import com.example.userservice.rpc.RpcUser;
@@ -33,17 +35,21 @@ class UserControllerIntegrationTest {
 
     @Test
     void createsAndReadsUser() throws Exception {
-        mockMvc.perform(get("/api/v1/admin/users/1").header("X-User-Role", "ADMIN"))
+        User user = createUser("demo-user", "演示用户");
+
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId()).header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nickname").value("演示用户"));
     }
 
     @Test
     void userCanOnlyDeleteOwnAccount() throws Exception {
-        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", "demo"))
+        User user = createUser("demo", "资料用户");
+
+        mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", user.getUid()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", "demo"))
+        mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", user.getUid()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DELETED"));
     }
@@ -96,11 +102,12 @@ class UserControllerIntegrationTest {
 
     @Test
     void supportsDubboCrudQueries() {
-                createUser("dubbo-profile-user", "资料用户");
+        createUser("dubbo-profile-user", "资料用户");
         RpcUser created = userDubboService.createUser(
                 new CreateUserCommand("dubbo-user", "Dubbo 用户", null, null, null));
 
-        org.junit.jupiter.api.Assertions.assertEquals("Dubbo 用户", created.getNickname());
+        org.junit.jupiter.api.Assertions.assertNotNull(created.getUid());
+        org.junit.jupiter.api.Assertions.assertEquals(1, created.getRole());
         org.junit.jupiter.api.Assertions.assertEquals(created.getUid(),
                 userDubboService.getUser(created.getUid()).getUid());
         org.junit.jupiter.api.Assertions.assertEquals(2,
@@ -117,7 +124,8 @@ class UserControllerIntegrationTest {
         User user = new User();
         user.setUid(username);
         user.setNickname(nickname);
-        user.setStatus(com.example.userservice.entity.UserStatus.NORMAL);
+                user.setRole(UserRole.USER.getCode());
+                user.setStatusEnum(UserStatus.NORMAL);
         user.setCreatedAt(java.time.LocalDateTime.now());
         user.setUpdatedAt(java.time.LocalDateTime.now());
         userRepository.insert(user);
