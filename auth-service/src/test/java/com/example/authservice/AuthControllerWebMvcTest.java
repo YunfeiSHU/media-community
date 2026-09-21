@@ -22,7 +22,7 @@ import com.example.authservice.service.AuthService;
 import com.example.authservice.service.LoginRateLimitService;
 import com.example.authservice.service.VerificationService;
 
-@WebMvcTest(AuthController.class)
+@WebMvcTest(controllers = AuthController.class)
 class AuthControllerWebMvcTest {
 
     @Autowired

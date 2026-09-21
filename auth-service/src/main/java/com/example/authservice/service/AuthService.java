@@ -1,6 +1,7 @@
 package com.example.authservice.service;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,9 +70,10 @@ public class AuthService {
             throw new BusinessException(BUSINESS_ERROR_CODE, "用户名或密码错误");
         }
         String jti = UUID.randomUUID().toString();
-        String uid = userServiceClient == null ? user.getUid()
-            : userServiceClient.getUser(user.getUid()).getUid();
-        String accessToken = jwtTokenService.generateAccessToken(uid, jti, accessTokenTtlSeconds);
+        RpcUser rpcUser = userServiceClient == null ? null : userServiceClient.getUser(user.getUid());
+        String uid = rpcUser != null ? rpcUser.getUid() : user.getUid();
+        int roleCode = Objects.requireNonNullElse(rpcUser != null ? rpcUser.getRole() : null, 1);
+        String accessToken = jwtTokenService.generateAccessToken(uid, jti, roleCode, accessTokenTtlSeconds);
         SessionService.Session session = sessionService.create(uid, jti);
         return new LoginResponse(uid, accessToken, session.refreshToken(),
                 accessTokenTtlSeconds, refreshTokenTtlSeconds);
@@ -81,7 +83,9 @@ public class AuthService {
         String uid = sessionService.uidFrom(request.refreshToken());
         String jti = UUID.randomUUID().toString();
         SessionService.Session session = sessionService.rotate(request.refreshToken(), jti);
-        String accessToken = jwtTokenService.generateAccessToken(uid, jti, accessTokenTtlSeconds);
+        RpcUser rpcUser = userServiceClient == null ? null : userServiceClient.getUser(uid);
+        int roleCode = Objects.requireNonNullElse(rpcUser != null ? rpcUser.getRole() : null, 1);
+        String accessToken = jwtTokenService.generateAccessToken(uid, jti, roleCode, accessTokenTtlSeconds);
         return new LoginResponse(uid, accessToken, session.refreshToken(),
                 accessTokenTtlSeconds, refreshTokenTtlSeconds);
     }

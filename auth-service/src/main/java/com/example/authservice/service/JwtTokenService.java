@@ -16,6 +16,9 @@ import io.jsonwebtoken.security.Keys;
 @Service
 public class JwtTokenService {
 
+    private static final String ISSUER = "auth-service";
+    private static final String AUDIENCE = "api";
+
     private final SecretKey signingKey;
 
     public JwtTokenService(@Value("${auth.jwt.secret}") String secret) {
@@ -23,18 +26,26 @@ public class JwtTokenService {
     }
 
     public String generateAccessToken(String uid, long expiresInSeconds) {
-        return generateAccessToken(uid, UUID.randomUUID().toString(), expiresInSeconds);
+        return generateAccessToken(uid, null, expiresInSeconds);
     }
 
     public String generateAccessToken(String uid, String jti, long expiresInSeconds) {
+        return generateAccessToken(uid, jti, null, expiresInSeconds);
+    }
+
+    public String generateAccessToken(String uid, String jti, Integer roleCode, long expiresInSeconds) {
         Instant now = Instant.now();
-        return Jwts.builder()
+        var builder = Jwts.builder()
+                .issuer(ISSUER)
                 .subject(uid)
-                .id(jti)
+                .audience().add(AUDIENCE).and()
+                .id(jti != null ? jti : UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(expiresInSeconds)))
-                .signWith(signingKey)
-                .compact();
+                .expiration(Date.from(now.plusSeconds(expiresInSeconds)));
+        if (roleCode != null) {
+            builder.claim("role", roleCode == 0 ? "ADMIN" : "user");
+        }
+        return builder.signWith(signingKey).compact();
     }
 
     public Claims parseAndValidate(String token) {
