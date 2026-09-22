@@ -1,4 +1,4 @@
-package com.example.order.api.dto;
+package com.example.product.api.dto;
 
 import java.io.Serial;
 import java.io.Serializable;

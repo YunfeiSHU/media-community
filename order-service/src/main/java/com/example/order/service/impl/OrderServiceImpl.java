@@ -1,7 +1,5 @@
 package com.example.order.service.impl;
 
-import com.example.order.api.dto.ProductDTO;
-import com.example.order.api.dto.SkuDTO;
 import com.example.order.common.BizException;
 import com.example.order.common.ErrorCode;
 import com.example.order.common.IdGenerator;
@@ -22,6 +20,8 @@ import com.example.order.mapper.PaymentOrderMapper;
 import com.example.order.service.OrderService;
 import com.example.order.support.OrderLookup;
 import com.example.order.support.ProductRpcClient;
+import com.example.product.api.dto.ProductDTO;
+import com.example.product.api.dto.SkuDTO;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;

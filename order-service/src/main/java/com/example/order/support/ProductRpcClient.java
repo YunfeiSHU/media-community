@@ -1,11 +1,11 @@
 package com.example.order.support;
 
-import com.example.order.api.ProductRpcService;
-import com.example.order.api.StockRpcService;
-import com.example.order.api.dto.ProductDTO;
-import com.example.order.api.dto.SkuDTO;
 import com.example.order.common.BizException;
 import com.example.order.common.ErrorCode;
+import com.example.product.api.ProductRpcService;
+import com.example.product.api.StockRpcService;
+import com.example.product.api.dto.ProductDTO;
+import com.example.product.api.dto.SkuDTO;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;

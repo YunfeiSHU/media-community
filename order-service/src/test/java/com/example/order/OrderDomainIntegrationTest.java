@@ -9,8 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.example.order.api.dto.ProductDTO;
-import com.example.order.api.dto.SkuDTO;
 import com.example.order.common.BizException;
 import com.example.order.common.ErrorCode;
 import com.example.order.domain.entity.Order;
@@ -33,6 +31,8 @@ import com.example.order.service.OrderService;
 import com.example.order.service.PaymentService;
 import com.example.order.support.PaymentSigner;
 import com.example.order.support.ProductRpcClient;
+import com.example.product.api.dto.ProductDTO;
+import com.example.product.api.dto.SkuDTO;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;

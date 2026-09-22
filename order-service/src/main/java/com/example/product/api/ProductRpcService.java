@@ -1,7 +1,7 @@
-package com.example.order.api;
+package com.example.product.api;
 
-import com.example.order.api.dto.ProductDTO;
-import com.example.order.api.dto.SkuDTO;
+import com.example.product.api.dto.ProductDTO;
+import com.example.product.api.dto.SkuDTO;
 import java.util.List;
 
 /**

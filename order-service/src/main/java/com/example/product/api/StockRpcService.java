@@ -1,6 +1,6 @@
-package com.example.order.api;
+package com.example.product.api;
 
-import com.example.order.api.dto.StockDTO;
+import com.example.product.api.dto.StockDTO;
 
 /**
  * 库存域 Dubbo 服务（消费方契约副本，全限定名与 product-service 保持一致）。

@@ -9,14 +9,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.order.api.dto.ProductDTO;
-import com.example.order.api.dto.SkuDTO;
 import com.example.order.domain.enums.CallbackStatus;
 import com.example.order.domain.enums.OrderStatus;
 import com.example.order.domain.enums.PaymentStatus;
 import com.example.order.dto.request.PaymentCallbackRequest;
 import com.example.order.support.PaymentSigner;
 import com.example.order.support.ProductRpcClient;
+import com.example.product.api.dto.ProductDTO;
+import com.example.product.api.dto.SkuDTO;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
