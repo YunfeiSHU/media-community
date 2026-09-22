@@ -1,0 +1,36 @@
+spring:
+  cloud:
+    # 测试环境不依赖 Nacos：关闭自动注册，避免启动时去连注册中心
+    service-registry:
+      auto-registration:
+        enabled: false
+    nacos:
+      discovery:
+        enabled: false
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:product_db;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-h2.sql
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.product.domain.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+dubbo:
+  registry:
+    address: N/A
+  protocol:
+    name: dubbo
+    port: -1
+
+logging:
+  level:
+    com.example.product: info
+    org.apache.dubbo: warn

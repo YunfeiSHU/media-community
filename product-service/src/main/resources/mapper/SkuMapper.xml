@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.product.mapper.SkuMapper">
+
+    <sql id="Base_Column_List">
+        id, sku_id, product_id, name, price, status, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="Sku" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sku (sku_id, product_id, name, price, status)
+        VALUES (#{skuId}, #{productId}, #{name}, #{price}, #{status})
+    </insert>
+
+    <select id="selectById" resultType="Sku">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sku
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectBySkuId" resultType="Sku">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sku
+        WHERE sku_id = #{skuId}
+    </select>
+
+    <select id="selectByProductId" resultType="Sku">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sku
+        WHERE product_id = #{productId}
+          AND status &lt;&gt; 2
+        ORDER BY id ASC
+    </select>
+
+    <select id="countByProductIdAndStatus" resultType="int">
+        SELECT COUNT(1)
+        FROM sku
+        WHERE product_id = #{productId}
+          AND status = #{status}
+    </select>
+
+    <update id="update" parameterType="Sku">
+        UPDATE sku
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="status != null">status = #{status},</if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusById">
+        UPDATE sku
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusByProductId">
+        UPDATE sku
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE product_id = #{productId}
+          AND status &lt;&gt; #{status}
+    </update>
+
+    <update id="updatePriceById">
+        UPDATE sku
+        SET price = #{price},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+</mapper>

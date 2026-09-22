@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.product.mapper.InventoryMapper">
+
+    <sql id="Base_Column_List">
+        id, sku_id, available_stock, locked_stock, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="Inventory" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO inventory (sku_id, available_stock, locked_stock)
+        VALUES (#{skuId}, #{availableStock}, #{lockedStock})
+    </insert>
+
+    <select id="selectBySkuId" resultType="Inventory">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM inventory
+        WHERE sku_id = #{skuId}
+    </select>
+
+    <select id="selectBySkuIds" resultType="Inventory">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM inventory
+        WHERE sku_id IN
+        <foreach collection="skuIds" item="skuId" open="(" separator="," close=")">
+            #{skuId}
+        </foreach>
+    </select>
+
+    <update id="increaseAvailable">
+        UPDATE inventory
+        SET available_stock = available_stock + #{quantity},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE sku_id = #{skuId}
+    </update>
+
+    <update id="reserve">
+        UPDATE inventory
+        SET available_stock = available_stock - #{quantity},
+            locked_stock    = locked_stock + #{quantity},
+            updated_at      = CURRENT_TIMESTAMP
+        WHERE sku_id = #{skuId}
+          AND available_stock &gt;= #{quantity}
+    </update>
+
+    <update id="confirm">
+        UPDATE inventory
+        SET locked_stock = locked_stock - #{quantity},
+            updated_at   = CURRENT_TIMESTAMP
+        WHERE sku_id = #{skuId}
+          AND locked_stock &gt;= #{quantity}
+    </update>
+
+    <update id="release">
+        UPDATE inventory
+        SET locked_stock    = locked_stock - #{quantity},
+            available_stock = available_stock + #{quantity},
+            updated_at      = CURRENT_TIMESTAMP
+        WHERE sku_id = #{skuId}
+          AND locked_stock &gt;= #{quantity}
+    </update>
+
+</mapper>

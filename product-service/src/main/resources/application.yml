@@ -1,0 +1,57 @@
+server:
+  port: ${SERVER_PORT:8003}
+
+spring:
+  application:
+    name: product-service
+  cloud:
+    # 注册到 Nacos，网关才能用 lb://product-service 路由到这里
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        register-enabled: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: ***REMOVED***
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+      connection-test-query: SELECT 1
+  jackson:
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.product.domain.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    default-statement-timeout: 5
+
+dubbo:
+  application:
+    name: product-service
+    qos-enable: false
+  registry:
+    # 单机演示：不走注册中心，直接暴露/消费（生产环境替换为 nacos://127.0.0.1:8848）
+    address: N/A
+  protocol:
+    name: dubbo
+    port: 20880
+  provider:
+    timeout: 3000
+    retries: 0
+
+logging:
+  # 具体落地由 logback-spring.xml 决定：控制台 + logs/product-service/product-service.log 滚动文件
+  # 每行日志都会带 requestId=%X{requestId}，与网关 / user-service / auth-service 对齐
+  level:
+    root: INFO
+    "[com.example.product]": info
+    # 打印 MyBatis 执行的 SQL 与参数
+    "[com.example.product.mapper]": debug
