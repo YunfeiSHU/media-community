@@ -1,0 +1,49 @@
+spring:
+  cloud:
+    # 测试环境不依赖 Nacos：关闭自动注册，避免启动时去连注册中心
+    service-registry:
+      auto-registration:
+        enabled: false
+    nacos:
+      discovery:
+        enabled: false
+  datasource:
+    driver-class-name: org.h2.Driver
+    # NON_KEYWORDS=ORDER：order 是保留字，放开后即便未加引号也能作为表名使用
+    url: jdbc:h2:mem:order_db;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=ORDER
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-h2.sql
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.order.domain.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+dubbo:
+  registry:
+    address: N/A
+  protocol:
+    name: dubbo
+    port: -1
+
+order:
+  expire-minutes: 30
+  rpc:
+    # 保留一个合法但不可达的直连地址：url 为空串时 Dubbo 会因为 registry.address=N/A 直接启动失败。
+    # 引用是 lazy 的，因此启动阶段不会真的发起连接。
+    product-url: dubbo://127.0.0.1:20880
+  payment:
+    callback-secret: test-callback-secret
+  task:
+    # 关闭定时任务，避免后台线程干扰用例（超时逻辑由测试直接调用 Service 覆盖）
+    enabled: false
+
+logging:
+  level:
+    com.example.order: info
+    org.apache.dubbo: warn

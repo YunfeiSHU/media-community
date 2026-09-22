@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.order.mapper.OrderMapper">
+
+    <!-- order 是 MySQL 保留字，所有 SQL 中都用反引号包裹 -->
+    <sql id="Base_Column_List">
+        id, order_id, uid, status, total_amount, expire_at, paid_at, completed_at, cancelled_at, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="Order" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO `order` (order_id, uid, status, total_amount, expire_at)
+        VALUES (#{orderId}, #{uid}, #{status}, #{totalAmount}, #{expireAt})
+    </insert>
+
+    <select id="selectById" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByOrderId" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE order_id = #{orderId}
+    </select>
+
+    <select id="selectByOrderIdAndUid" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE order_id = #{orderId}
+          AND uid = #{uid}
+    </select>
+
+    <!-- WAIT_PAY(0) → PAID(1)：带原状态校验，并发下只会成功一次 -->
+    <update id="markPaid">
+        UPDATE `order`
+        SET status = 1,
+            paid_at = #{paidAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 0
+    </update>
+
+    <!-- PAID(1) → COMPLETED(2) -->
+    <update id="markCompleted">
+        UPDATE `order`
+        SET status = 2,
+            completed_at = #{completedAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <!-- WAIT_PAY(0) → CANCELLED(3) -->
+    <update id="markCancelled">
+        UPDATE `order`
+        SET status = 3,
+            cancelled_at = #{cancelledAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 0
+    </update>
+
+    <select id="selectByUid" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE uid = #{uid}
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByUid" resultType="long">
+        SELECT COUNT(*)
+        FROM `order`
+        WHERE uid = #{uid}
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <!-- 超时扫描：命中 idx_status_expire_at 索引 -->
+    <select id="selectExpired" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE status = 0
+          AND expire_at IS NOT NULL
+          AND expire_at &lt;= #{now}
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+
+    <!-- 权益发放补偿扫描：已支付但尚未完成的订单 -->
+    <select id="selectPaidBefore" resultType="Order">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM `order`
+        WHERE status = 1
+          AND paid_at IS NOT NULL
+          AND paid_at &lt;= #{paidBefore}
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+</mapper>
