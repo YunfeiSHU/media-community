@@ -11,7 +11,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "gateway.auth")
 public class GatewayAuthProperties {
 
-    /** 无需认证即可访问的路径，Ant 风格 */
+    /**
+     * 无需认证即可访问的路径，Ant 风格。支持两种写法：
+     * <ul>
+     *     <li>{@code /path/**} —— 任意 HTTP 方法均可访问；</li>
+     *     <li>{@code GET /path/*} —— 仅指定 HTTP 方法可访问，其余方法仍执行 JWT 校验。</li>
+     * </ul>
+     */
     private List<String> permitAll = new ArrayList<>();
 
     private Jwt jwt = new Jwt();

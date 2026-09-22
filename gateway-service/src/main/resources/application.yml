@@ -40,6 +40,16 @@ spring:
           uri: lb://auth-service
           predicates:
             - Path=/api/v1/auth/**
+        # 商品服务
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**,/api/v1/skus/**
+        # 订单服务（订单 + 支付回调）
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**,/api/v1/payments/**
       # 全局默认过滤器
       default-filters:
         # 移除下游服务不需要的敏感头
@@ -52,11 +62,21 @@ spring:
 # 网关自身的 JWT 配置
 gateway:
   auth:
-    # 无需认证即可访问的路径（Ant 风格）
+    # 无需认证即可访问的路径
+    # 两种写法：
+    #   1) "/path/**"        —— 任意方法均可访问
+    #   2) "GET /path/*"     —— 仅指定 HTTP 方法可访问（方法 + 空格 + 路径），其余方法仍走 JWT
+    # 注意：Ant 的 * 只匹配单个路径段，"/api/v1/products/*" 不会匹配 "/api/v1/products/1/skus"
     permit-all:
       - /api/v1/auth/login
       - /api/v1/auth/refresh
       - /api/v1/auth/register
+      # 商品详情、SKU详情：仅 GET 对外公开；创建/修改/删除/上下架/价格/库存等仍必须过 JWT
+      - GET /api/v1/products/*
+      - GET /api/v1/skus/*
+      # 支付渠道异步回调：渠道服务器无法携带用户令牌，必须免 JWT；
+      # 该分支会清掉 uid / X-User-Id / X-User-Role，order-service 侧靠支付单反查身份 + 报文验签保证安全
+      - POST /api/v1/payments/callback
     jwt:
       # 生产环境务必通过环境变量注入，不要提交到仓库
       secret: ${JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}

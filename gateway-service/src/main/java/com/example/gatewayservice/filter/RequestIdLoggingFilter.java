@@ -3,6 +3,8 @@ package com.example.gatewayservice.filter;
 import java.time.Duration;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -16,6 +18,8 @@ import reactor.core.publisher.Mono;
 
 @Component
 public class RequestIdLoggingFilter implements GlobalFilter, Ordered {
+
+    private static final Logger log = LoggerFactory.getLogger(RequestIdLoggingFilter.class);
 
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String MDC_REQUEST_ID_KEY = "requestId";
@@ -31,7 +35,6 @@ public class RequestIdLoggingFilter implements GlobalFilter, Ordered {
         String requestId = resolveRequestId(request);
         String path = request.getURI().getPath();
         String method = request.getMethod() != null ? request.getMethod().name() : "UNKNOWN";
-        String route = resolveRoute(exchange);
 
         ServerHttpRequest mutatedRequest = request.mutate()
                 .header(REQUEST_ID_HEADER, requestId)
@@ -46,6 +49,8 @@ public class RequestIdLoggingFilter implements GlobalFilter, Ordered {
                     var responseStatus = response.getStatusCode();
                     int status = responseStatus != null ? responseStatus.value() : 200;
                     long latencyMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+                    // gatewayRouteId 由 RoutePredicateHandlerMapping 在 chain.filter() 之后写入，必须在 doFinally 内取值
+                    String route = resolveRoute(mutatedExchange);
 
                     MDC.put(MDC_REQUEST_ID_KEY, requestId);
                     MDC.put(MDC_PATH_KEY, path);
@@ -54,12 +59,9 @@ public class RequestIdLoggingFilter implements GlobalFilter, Ordered {
                     MDC.put(MDC_LATENCY_KEY, latencyMs + "ms");
                     MDC.put(MDC_ROUTE_KEY, route);
                     try {
-                        System.out.println("requestId=" + requestId
-                                + " path=" + path
-                                + " method=" + method
-                                + " status=" + status
-                                + " latency=" + latencyMs + "ms"
-                                + " route=" + route);
+                        // 交给 logback 输出：与 logback-spring.xml 的 requestId 模式对齐，同时落地到文件
+                        log.info("access path={} method={} status={} latency={}ms route={}",
+                                path, method, status, latencyMs, route);
                     } finally {
                         MDC.remove(MDC_REQUEST_ID_KEY);
                         MDC.remove(MDC_PATH_KEY);

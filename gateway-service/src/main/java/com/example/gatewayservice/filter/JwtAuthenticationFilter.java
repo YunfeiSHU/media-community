@@ -47,9 +47,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
+        String method = request.getMethod() != null ? request.getMethod().name() : "";
 
-        if (isPermitAll(path)) {
-            return chain.filter(exchange);
+        if (isPermitAll(path, method)) {
+            // 白名单放行前同样清洗身份头，避免客户端伪造 uid / X-User-Id / X-User-Role 直通下游
+            return chain.filter(stripIdentityHeaders(exchange));
         }
 
         String token = extractBearerToken(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
@@ -131,9 +133,47 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return Ordered.HIGHEST_PRECEDENCE + 2;
     }
 
-    private boolean isPermitAll(String path) {
-        return gatewayAuthProperties.getPermitAll().stream()
-                .anyMatch(pattern -> PATH_MATCHER.match(pattern, path));
+    /**
+     * 判断请求是否命中免鉴权白名单。
+     *
+     * <p>规则支持 {@code METHOD /path} 前缀写法，例如 {@code GET /api/v1/products/*}
+     * 表示只有 GET 方法免鉴权；不带方法前缀时对任意方法放行。
+     */
+    private boolean isPermitAll(String path, String method) {
+        for (String rule : gatewayAuthProperties.getPermitAll()) {
+            if (!StringUtils.hasText(rule)) {
+                continue;
+            }
+            String pattern = rule.trim();
+            int separator = pattern.indexOf(' ');
+            if (separator > 0) {
+                String requiredMethod = pattern.substring(0, separator).trim();
+                pattern = pattern.substring(separator + 1).trim();
+                if (!requiredMethod.equalsIgnoreCase(method)) {
+                    continue;
+                }
+            }
+            if (PATH_MATCHER.match(pattern, path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 移除客户端可能伪造的身份头。
+     *
+     * <p>仅用于白名单分支：受保护路径由 {@link #proceedWithRequest} 覆盖写入可信身份头。
+     */
+    private ServerWebExchange stripIdentityHeaders(ServerWebExchange exchange) {
+        ServerHttpRequest sanitized = exchange.getRequest().mutate()
+                .headers(headers -> {
+                    headers.remove(UID_HEADER);
+                    headers.remove(USER_ID_HEADER);
+                    headers.remove(USER_ROLE_HEADER);
+                })
+                .build();
+        return exchange.mutate().request(sanitized).build();
     }
 
     private String extractBearerToken(String authorizationHeader) {

@@ -51,7 +51,10 @@ class GatewayFilterTests {
         gatewayAuthProperties.getJwt().setSecret(SECRET);
         gatewayAuthProperties.getJwt().setIssuer("auth-service");
         gatewayAuthProperties.getJwt().setAudience("api");
-        gatewayAuthProperties.setPermitAll(List.of("/api/v1/auth/**"));
+        gatewayAuthProperties.setPermitAll(List.of(
+                "/api/v1/auth/**",
+                "GET /api/v1/products/*",
+                "GET /api/v1/skus/*"));
 
         redisBlacklistService = mock(RedisBlacklistService.class);
         jwtAuthenticationFilter = new JwtAuthenticationFilter(gatewayAuthProperties, redisBlacklistService);
@@ -67,7 +70,93 @@ class GatewayFilterTests {
 
         StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
 
-        verify(chain).filter(exchange);
+        verify(chain).filter(any());
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void jwtFilter_shouldStripForgedIdentityHeadersOnPermitAllPath() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/products/P1001")
+                        .header("uid", "forged-uid")
+                        .header("X-User-Id", "forged-uid")
+                        .header("X-User-Role", "admin")
+                        .build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        ArgumentCaptor<org.springframework.web.server.ServerWebExchange> captor =
+                ArgumentCaptor.forClass(org.springframework.web.server.ServerWebExchange.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(chain).filter(captor.capture());
+        ServerHttpRequest forwarded = captor.getValue().getRequest();
+        assertThat(forwarded.getHeaders().getFirst("uid")).isNull();
+        assertThat(forwarded.getHeaders().getFirst("X-User-Id")).isNull();
+        assertThat(forwarded.getHeaders().getFirst("X-User-Role")).isNull();
+    }
+
+    @Test
+    void jwtFilter_shouldAllowPublicProductDetailGetWithoutToken() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/products/P1001").build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(chain).filter(any());
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void jwtFilter_shouldAllowPublicSkuDetailGetWithoutToken() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/skus/S1001").build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(chain).filter(any());
+        assertThat(exchange.getResponse().getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void jwtFilter_shouldRequireTokenForNonGetProductDetail() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.put("/api/v1/products/P1001").build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    void jwtFilter_shouldRequireTokenForProductCreate() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/v1/products").build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    void jwtFilter_shouldRequireTokenForSkuPriceEndpoint() {
+        // "/api/v1/skus/*" 只覆盖单段，价格 / 库存等子资源仍需鉴权
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/skus/S1001/price").build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(chain, never()).filter(any());
     }
 
     @Test
