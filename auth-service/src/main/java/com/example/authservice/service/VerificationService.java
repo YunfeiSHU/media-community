@@ -5,7 +5,8 @@ import java.time.Duration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.example.authservice.exception.BusinessException;
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 import com.example.authservice.verification.enums.VerificationPurpose;
 import com.example.authservice.verification.enums.VerificationType;
 import com.example.authservice.verification.generator.CodeGenerator;
@@ -14,7 +15,6 @@ import com.example.authservice.verification.provider.NotificationProviderFactory
 @Service
 public class VerificationService {
 
-    private static final int BUSINESS_ERROR_CODE = 1001;
     private static final Duration CODE_TTL = Duration.ofMinutes(3);
     private static final Duration COOLDOWN = Duration.ofSeconds(60);
 
@@ -32,7 +32,7 @@ public class VerificationService {
         String normalizedTarget = normalize(type, target);
         String cooldownKey = cooldownKey(purpose, type, normalizedTarget);
         if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "验证码获取过于频繁");
+            throw new BizException(ErrorCode.TOO_MANY_REQUESTS, "验证码获取过于频繁");
         }
 
         String code = codeGenerator.generate();
@@ -48,7 +48,7 @@ public class VerificationService {
         String key = codeKey(purpose, type, normalizedTarget);
         String expectedCode = redisTemplate.opsForValue().get(key);
         if (expectedCode == null || !expectedCode.equals(code)) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "验证码无效或已过期");
+            throw new BizException(ErrorCode.BUSINESS_ERROR, "验证码无效或已过期");
         }
         redisTemplate.delete(key);
     }
@@ -57,12 +57,12 @@ public class VerificationService {
         String normalizedTarget = target.trim();
         if (type == VerificationType.EMAIL) {
             if (!normalizedTarget.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-                throw new BusinessException(BUSINESS_ERROR_CODE, "email 格式不正确");
+                throw new BizException(ErrorCode.INVALID_PARAM, "email 格式不正确");
             }
             return normalizedTarget.toLowerCase();
         }
         if (!normalizedTarget.matches("^1[3-9]\\d{9}$")) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "phone 格式不正确");
+            throw new BizException(ErrorCode.INVALID_PARAM, "phone 格式不正确");
         }
         return normalizedTarget;
     }

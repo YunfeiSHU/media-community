@@ -13,6 +13,8 @@ import com.example.authservice.dto.LoginResponse;
 import com.example.authservice.dto.PhoneRegisterRequest;
 import com.example.authservice.dto.RefreshTokenRequest;
 import com.example.authservice.dto.SendVerificationRequest;
+import com.example.authservice.common.ApiResponse;
+import com.example.authservice.common.CurrentUser;
 import com.example.authservice.service.AuthService;
 import com.example.authservice.service.LoginRateLimitService;
 import com.example.authservice.service.VerificationService;
@@ -54,10 +56,18 @@ public class AuthController {
         return ApiResponse.success();
     }
 
+    /**
+     * 管理员强制下线指定用户。
+     *
+     * <p>{@code uid} 是<b>操作目标</b>（即被下线的用户）；调用者身份与角色只能来自
+     * 网关校验 JWT 后注入的 {@code X-User-Id} / {@code X-User-Role}，非管理员返回 403。
+     */
     @PostMapping("/force-logout")
-    public ApiResponse<Void> forceLogout(@RequestParam("uid") String uid,
-                                        @RequestHeader("Authorization") String authorization) {
-        authService.forceLogout(uid, authorization);
+    public ApiResponse<Void> forceLogout(@RequestParam("uid") String targetUid,
+                                        @RequestHeader("Authorization") String authorization,
+                                        HttpServletRequest httpRequest) {
+        CurrentUser.requireAdmin(httpRequest);
+        authService.forceLogout(targetUid, authorization);
         return ApiResponse.success();
     }
 
@@ -80,16 +90,6 @@ public class AuthController {
     public ApiResponse<Void> registerEmail(@Valid @RequestBody EmailRegisterRequest request) {
         authService.registerByContact(VerificationType.EMAIL, request.email(), request.code(), request.password());
         return ApiResponse.success();
-    }
-
-    public record ApiResponse<T>(int code, String message, T data) {
-        private static <T> ApiResponse<T> success() {
-            return new ApiResponse<>(0, "success", null);
-        }
-
-        private static <T> ApiResponse<T> success(T data) {
-            return new ApiResponse<>(0, "success", data);
-        }
     }
 
     public record VerificationInfo(String purpose, String type, String target, String code) {

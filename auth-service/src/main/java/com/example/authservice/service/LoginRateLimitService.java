@@ -6,12 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.example.authservice.exception.BusinessException;
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 
 @Service
 public class LoginRateLimitService {
 
-    private static final int RATE_LIMIT_ERROR_CODE = 1003;
     private static final String KEY_PREFIX = "auth:login:rate:ip:";
 
     private final StringRedisTemplate redisTemplate;
@@ -28,7 +28,7 @@ public class LoginRateLimitService {
 
     public void check(String ipAddress) {
         if (ipAddress == null || ipAddress.isBlank()) {
-            throw new BusinessException(RATE_LIMIT_ERROR_CODE, "无法识别客户端 IP");
+            throw new BizException(ErrorCode.INVALID_PARAM, "无法识别客户端 IP");
         }
 
         String key = KEY_PREFIX + ipAddress;
@@ -37,7 +37,7 @@ public class LoginRateLimitService {
             redisTemplate.expire(key, window);
         }
         if (count != null && count > maxAttempts) {
-            throw new BusinessException(RATE_LIMIT_ERROR_CODE, "登录请求过于频繁");
+            throw new BizException(ErrorCode.TOO_MANY_REQUESTS, "登录请求过于频繁");
         }
     }
 }

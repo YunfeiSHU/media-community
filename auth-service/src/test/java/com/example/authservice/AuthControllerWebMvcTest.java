@@ -15,9 +15,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 import com.example.authservice.controller.AuthController;
 import com.example.authservice.dto.LoginResponse;
-import com.example.authservice.exception.BusinessException;
 import com.example.authservice.service.AuthService;
 import com.example.authservice.service.LoginRateLimitService;
 import com.example.authservice.service.VerificationService;
@@ -65,8 +66,8 @@ class AuthControllerWebMvcTest {
 
                 @Test
                 void loginReturnsRateLimitErrorWhenIpExceedsWindowLimit() throws Exception {
-                                doThrow(new BusinessException(1003, "登录请求过于频繁"))
-                                                                .when(loginRateLimitService).check(any());
+                                                                doThrow(new BizException(ErrorCode.TOO_MANY_REQUESTS, "登录请求过于频繁"))
+                                                                                                .when(loginRateLimitService).check(any());
 
                                 mockMvc.perform(post("/api/v1/auth/login")
                                                                                                 .contentType(MediaType.APPLICATION_JSON)
@@ -77,8 +78,8 @@ class AuthControllerWebMvcTest {
                                                                                                                                         "password": "Abc123456"
                                                                                                                                 }
                                                                                                                                 """))
-                                                                .andExpect(status().isBadRequest())
-                                                                .andExpect(jsonPath("$.code").value(1003))
+                                                                .andExpect(status().isTooManyRequests())
+                                                                .andExpect(jsonPath("$.code").value(42901))
                                                                 .andExpect(jsonPath("$.message").value("登录请求过于频繁"))
                                                                 .andExpect(jsonPath("$.data").doesNotExist());
                 }
@@ -114,9 +115,11 @@ class AuthControllerWebMvcTest {
         }
 
         @Test
-        void forceLogoutReturnsSuccessResponse() throws Exception {
+        void forceLogoutReturnsSuccessResponseForAdmin() throws Exception {
                 mockMvc.perform(post("/api/v1/auth/force-logout")
                                                 .param("uid", "uid-100")
+                                                .header("X-User-Id", "admin-1")
+                                                .header("X-User-Role", "ADMIN")
                                                 .header("Authorization", "Bearer access-token"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.code").value(0))
@@ -124,6 +127,47 @@ class AuthControllerWebMvcTest {
                                 .andExpect(jsonPath("$.data").doesNotExist());
 
                 verify(authService).forceLogout("uid-100", "Bearer access-token");
+        }
+
+        @Test
+        void forceLogoutRejectedForNormalUser() throws Exception {
+                // 角色只认网关注入的 X-User-Role：普通用户 403，且不会落到业务层
+                mockMvc.perform(post("/api/v1/auth/force-logout")
+                                                .param("uid", "uid-100")
+                                                .header("X-User-Id", "user-1")
+                                                .header("X-User-Role", "user")
+                                                .header("Authorization", "Bearer access-token"))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.code").value(40301));
+
+                verify(authService, org.mockito.Mockito.never()).forceLogout(any(), any());
+        }
+
+        @Test
+        void forceLogoutRejectedWhenNoIdentityHeaderPresent() throws Exception {
+                // 直连/未经网关：没有任何身份头 → 401（未认证）
+                mockMvc.perform(post("/api/v1/auth/force-logout")
+                                                .param("uid", "uid-100")
+                                                .param("role", "ADMIN")
+                                                .header("Authorization", "Bearer access-token"))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(jsonPath("$.code").value(40101));
+
+                verify(authService, org.mockito.Mockito.never()).forceLogout(any(), any());
+        }
+
+        @Test
+        void forceLogoutRejectedWhenRoleNotInjectedEvenIfForgedInParams() throws Exception {
+                // 有 uid 但网关未注入角色（如白名单路径/直连）：参数里伪造 role=ADMIN 无效 → 403
+                mockMvc.perform(post("/api/v1/auth/force-logout")
+                                                .param("uid", "uid-100")
+                                                .param("role", "ADMIN")
+                                                .header("X-User-Id", "uid-100")
+                                                .header("Authorization", "Bearer access-token"))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.code").value(40301));
+
+                verify(authService, org.mockito.Mockito.never()).forceLogout(any(), any());
         }
 
     @Test
@@ -179,7 +223,7 @@ class AuthControllerWebMvcTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(1002))
+                .andExpect(jsonPath("$.code").value(40001))
                 .andExpect(jsonPath("$.message").value("target 不能为空"));
     }
 
@@ -225,7 +269,7 @@ class AuthControllerWebMvcTest {
 
     @Test
     void registerPhoneReturnsBusinessErrorWhenContactAlreadyExists() throws Exception {
-        doThrow(new BusinessException(1001, "联系方式已注册"))
+        doThrow(new BizException(ErrorCode.BUSINESS_ERROR, "联系方式已注册"))
                 .when(authService).registerByContact(any(), eq("13800138000"),
                         eq("123456"), eq("Abc123456"));
 
@@ -239,7 +283,7 @@ class AuthControllerWebMvcTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.code").value(40000))
                 .andExpect(jsonPath("$.message").value("联系方式已注册"))
                 .andExpect(jsonPath("$.data").doesNotExist());
     }

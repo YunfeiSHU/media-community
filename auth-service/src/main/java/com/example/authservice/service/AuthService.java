@@ -11,11 +11,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 import com.example.authservice.dto.LoginRequest;
 import com.example.authservice.dto.LoginResponse;
 import com.example.authservice.dto.RefreshTokenRequest;
 import com.example.authservice.entity.Account;
-import com.example.authservice.exception.BusinessException;
 import com.example.authservice.repository.AccountRepository;
 import com.example.authservice.verification.enums.VerificationPurpose;
 import com.example.authservice.verification.enums.VerificationType;
@@ -23,8 +24,6 @@ import com.example.userservice.rpc.RpcUser;
 
 @Service
 public class AuthService {
-
-    private static final int BUSINESS_ERROR_CODE = 1001;
 
     private final AccountRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -67,7 +66,7 @@ public class AuthService {
         Account user = userRepository.findByContact(normalizeTarget(request.type(), request.target()));
         if (user == null || !Integer.valueOf(1).equals(user.getStatus())
                 || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "用户名或密码错误");
+            throw new BizException(ErrorCode.BUSINESS_ERROR, "用户名或密码错误");
         }
         String jti = UUID.randomUUID().toString();
         RpcUser rpcUser = userServiceClient == null ? null : userServiceClient.getUser(user.getUid());
@@ -94,6 +93,14 @@ public class AuthService {
         jwtBlacklistService.blacklist(authorization);
     }
 
+    /**
+     * 强制下线：清掉目标用户的所有会话并拉黑当前 Access Token。
+     *
+     * <p>调用者的管理员身份由 {@code AuthController} 依据网关注入的 {@code X-User-Role}
+     * 校验（角色只能来自 JWT），此处只负责执行。
+     *
+     * @param uid 被下线的目标用户 uid（来自请求参数，不是调用者身份）
+     */
     public void forceLogout(String uid, String authorization) {
         sessionService.deleteByUid(uid);
         jwtBlacklistService.blacklist(authorization);
@@ -104,7 +111,7 @@ public class AuthService {
         verificationService.verify(VerificationPurpose.REGISTER, type, target, code);
         String normalizedTarget = normalizeTarget(type, target);
         if (userRepository.findByContact(normalizedTarget) != null) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "联系方式已注册");
+            throw new BizException(ErrorCode.BUSINESS_ERROR, "联系方式已注册");
         }
 
         RpcUser createdUser = userServiceClient == null ? null : userServiceClient.createUser();
@@ -125,7 +132,7 @@ public class AuthService {
         try {
             userRepository.insert(user);
         } catch (DuplicateKeyException exception) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "联系方式已注册");
+            throw new BizException(ErrorCode.BUSINESS_ERROR, "联系方式已注册");
         }
     }
 

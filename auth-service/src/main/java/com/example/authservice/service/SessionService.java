@@ -16,12 +16,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
-import com.example.authservice.exception.BusinessException;
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 
 @Service
 public class SessionService {
 
-    private static final int BUSINESS_ERROR_CODE = 1001;
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final DefaultRedisScript<Long> ROTATE_SCRIPT = new DefaultRedisScript<>("""
@@ -149,8 +149,8 @@ public class SessionService {
         }
     }
 
-    private BusinessException invalidRefreshToken() {
-        return new BusinessException(BUSINESS_ERROR_CODE, "Refresh Token 无效或已过期");
+    private BizException invalidRefreshToken() {
+        return new BizException(ErrorCode.UNAUTHORIZED, "Refresh Token 无效或已过期");
     }
 
     public record Session(String refreshToken, long expiresIn) {

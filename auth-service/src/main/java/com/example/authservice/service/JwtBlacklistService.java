@@ -6,14 +6,14 @@ import java.time.Instant;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.example.authservice.exception.BusinessException;
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 
 import io.jsonwebtoken.Claims;
 
 @Service
 public class JwtBlacklistService {
 
-    private static final int BUSINESS_ERROR_CODE = 1001;
     private static final String KEY_PREFIX = "auth:blacklist:";
 
     private final StringRedisTemplate redisTemplate;
@@ -41,12 +41,12 @@ public class JwtBlacklistService {
 
     private Claims parseBearerToken(String authorization) {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "Access Token 无效");
+            throw new BizException(ErrorCode.UNAUTHORIZED, "Access Token 无效");
         }
         try {
             return jwtTokenService.parseAndValidate(authorization.substring(7));
         } catch (RuntimeException exception) {
-            throw new BusinessException(BUSINESS_ERROR_CODE, "Access Token 无效");
+            throw new BizException(ErrorCode.UNAUTHORIZED, "Access Token 无效");
         }
     }
 

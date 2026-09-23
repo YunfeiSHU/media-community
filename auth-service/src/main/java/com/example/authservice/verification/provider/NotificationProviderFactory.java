@@ -1,6 +1,7 @@
 package com.example.authservice.verification.provider;
 
-import com.example.authservice.exception.BusinessException;
+import com.example.authservice.common.BizException;
+import com.example.authservice.common.ErrorCode;
 import com.example.authservice.verification.enums.VerificationType;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +21,7 @@ public class NotificationProviderFactory {
     public NotificationProvider get(VerificationType type) {
         NotificationProvider provider = providers.get(type);
         if (provider == null) {
-            throw new BusinessException(1001, "不支持的验证码类型");
+            throw new BizException(ErrorCode.INVALID_PARAM, "不支持的验证码类型");
         }
         return provider;
     }
