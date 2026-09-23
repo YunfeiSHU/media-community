@@ -37,9 +37,12 @@ class UserControllerIntegrationTest {
     void createsAndReadsUser() throws Exception {
         User user = createUser("demo-user", "演示用户");
 
-        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId()).header("X-User-Role", "ADMIN"))
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId())
+                        .header("X-User-Id", "admin-1")
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("演示用户"));
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.nickname").value("演示用户"));
     }
 
     @Test
@@ -47,11 +50,12 @@ class UserControllerIntegrationTest {
         User user = createUser("demo", "资料用户");
 
         mockMvc.perform(delete("/api/v1/users/me").header("X-User-Id", user.getUid()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
 
         mockMvc.perform(get("/api/v1/users/me").header("X-User-Id", user.getUid()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("DELETED"));
+                .andExpect(jsonPath("$.data.status").value("DELETED"));
     }
 
     @Test
@@ -63,12 +67,14 @@ class UserControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nickname\":\"新昵称\",\"bio\":\"简介\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("新昵称"))
-                .andExpect(jsonPath("$.bio").value("简介"));
+                .andExpect(jsonPath("$.data.nickname").value("新昵称"))
+                .andExpect(jsonPath("$.data.bio").value("简介"));
 
-        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId()).header("X-User-Role", "ADMIN"))
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", user.getId())
+                        .header("X-User-Id", "admin-1")
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("NORMAL"));
+                .andExpect(jsonPath("$.data.status").value("NORMAL"));
     }
 
     @Test
@@ -88,15 +94,52 @@ class UserControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"DISABLED\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("DISABLED"));
+                .andExpect(jsonPath("$.data.status").value("DISABLED"));
+    }
+
+    @Test
+    void adminEndpointsTakeRoleOnlyFromGatewayHeader() throws Exception {
+        long userId = createUser("role-source-user", "角色来源用户").getId();
+
+        // 1) 只有身份头、没有角色头（如白名单路径或直连）→ 403，不会因为参数里写了 ADMIN 就放行
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/v1/admin/users/{userId}/status", userId)
+                        .queryParam("role", "ADMIN")
+                        .header("X-User-Id", "1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DISABLED\"}"))
+                .andExpect(status().isForbidden());
+
+        // 2) 普通用户角色 → 403
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", userId)
+                        .header("X-User-Id", "1")
+                        .header("X-User-Role", "user"))
+                .andExpect(status().isForbidden());
+
+        // 3) 完全没有身份头 → 401（未认证优先于鉴权）
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", userId))
+                .andExpect(status().isUnauthorized());
+
+        // 4) 网关注入 ADMIN 角色 → 200
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", userId)
+                        .header("X-User-Id", "admin-1")
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk());
     }
 
     @Test
     void validatesMissingUserAndDuplicateUserErrors() throws Exception {
+        // 缺少网关注入的身份头 → 未认证（401），不是参数错误
         mockMvc.perform(get("/api/v1/users/me"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(get("/api/v1/admin/users/999999").header("X-User-Role", "ADMIN"))
+        // 历史非标准头 uid 仍作兜底兼容
+        mockMvc.perform(get("/api/v1/users/me").header("uid", "no-such-uid"))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/v1/admin/users/999999")
+                        .header("X-User-Id", "admin-1")
+                        .header("X-User-Role", "ADMIN"))
                 .andExpect(status().isNotFound());
     }
 

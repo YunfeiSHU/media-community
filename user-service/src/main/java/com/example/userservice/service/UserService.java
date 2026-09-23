@@ -8,12 +8,12 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.userservice.common.BizException;
+import com.example.userservice.common.ErrorCode;
 import com.example.userservice.dto.UserCreateRequest;
 import com.example.userservice.dto.UserUpdateRequest;
 import com.example.userservice.entity.User;
 import com.example.userservice.entity.UserStatus;
-import com.example.userservice.exception.ConflictException;
-import com.example.userservice.exception.ResourceNotFoundException;
 import com.example.userservice.repository.UserRepository;
 
 @Service
@@ -39,7 +39,7 @@ public class UserService {
         try {
             userRepository.insert(user);
         } catch (DuplicateKeyException exception) {
-            throw new ConflictException("username already exists");
+            throw new BizException(ErrorCode.USERNAME_CONFLICT, "username already exists");
         }
         return user;
     }
@@ -53,7 +53,7 @@ public class UserService {
     public User getRequired(Long userId) {
         User user = userRepository.findById(userId);
         if (user == null) {
-            throw new ResourceNotFoundException("user not found: " + userId);
+            throw new BizException(ErrorCode.USER_NOT_FOUND, "user not found: " + userId);
         }
         return user;
     }
@@ -61,7 +61,7 @@ public class UserService {
     public User getRequiredByUid(String uid) {
         User user = userRepository.findByUid(uid);
         if (user == null) {
-            throw new ResourceNotFoundException("user not found: " + uid);
+            throw new BizException(ErrorCode.USER_NOT_FOUND, "user not found: " + uid);
         }
         return user;
     }
