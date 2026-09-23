@@ -38,6 +38,12 @@ public class GatewayAuthProperties {
         this.jwt = jwt;
     }
 
+    /**
+     * JWT 校验配置。
+     *
+     * <p>用户 ID <b>固定</b>取 JWT 标准 claim {@code sub}（auth-service 签发时把用户 uid 写进 sub），
+     * 因此这里不再提供「uid 所在 claim 名」的配置项，避免配置与实现不一致；角色取 {@link #roleClaim}。
+     */
     public static class Jwt {
         /** 签名密钥，HS256 要求至少 32 字节 */
         private String secret;
@@ -47,9 +53,6 @@ public class GatewayAuthProperties {
 
         /** 允许的受众 */
         private String audience = "api";
-
-        /** 用户 ID 所在的 claim 名 */
-        private String userIdClaim = "uid";
 
         /** 角色所在的 claim 名 */
         private String roleClaim = "role";
@@ -76,14 +79,6 @@ public class GatewayAuthProperties {
 
         public void setAudience(String audience) {
             this.audience = audience;
-        }
-
-        public String getUserIdClaim() {
-            return userIdClaim;
-        }
-
-        public void setUserIdClaim(String userIdClaim) {
-            this.userIdClaim = userIdClaim;
         }
 
         public String getRoleClaim() {

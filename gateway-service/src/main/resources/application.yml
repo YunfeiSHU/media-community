@@ -80,8 +80,7 @@ gateway:
     jwt:
       # 生产环境务必通过环境变量注入，不要提交到仓库
       secret: ${JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}
-      # 从 token 中提取用户 ID 的 claim 名
-      user-id-claim: sub
+      # 用户 ID 固定取 JWT 标准 claim `sub`（auth-service 签发时写入用户 uid），无对应配置项
       # 从 token 中提取角色的 claim 名
       role-claim: role
   rate-limit:

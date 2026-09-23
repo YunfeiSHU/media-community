@@ -172,11 +172,15 @@ class GatewayFilterTests {
     }
 
     @Test
-    void jwtFilter_shouldInjectUserHeadersOnValidToken() {
+    void jwtFilter_shouldInjectUserHeadersFromSubjectOnValidToken() {
         String token = buildToken("u-1001", "admin");
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/me")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .header("X-Request-Id", "req-123")
+                // 客户端伪造的身份头必须被覆盖
+                .header("uid", "forged-uid")
+                .header("X-User-Id", "forged-uid")
+                .header("X-User-Role", "ADMIN")
                 .build();
         MockServerWebExchange exchange = MockServerWebExchange.from(request);
         GatewayFilterChain chain = mock(GatewayFilterChain.class);
@@ -189,7 +193,8 @@ class GatewayFilterTests {
         verify(chain).filter(captor.capture());
         ServerHttpRequest mutatedRequest = captor.getValue().getRequest();
         assertThat(mutatedRequest.getHeaders().getFirst("X-Request-Id")).isEqualTo("req-123");
-        assertThat(mutatedRequest.getHeaders().getFirst("uid")).isEqualTo("u-1001");
+        // uid 只来自 JWT 的 sub；历史非标准头 uid 不再注入
+        assertThat(mutatedRequest.getHeaders().getFirst("uid")).isNull();
         assertThat(mutatedRequest.getHeaders().getFirst("X-User-Id")).isEqualTo("u-1001");
         assertThat(mutatedRequest.getHeaders().getFirst("X-User-Role")).isEqualTo("admin");
     }
@@ -404,6 +409,49 @@ class GatewayFilterTests {
         IpRateLimitFilter filter = new IpRateLimitFilter(redisTemplate, properties);
 
         assertThat(filter.getOrder()).isEqualTo(Integer.MIN_VALUE + 1);
+    }
+
+    @Test
+    void jwtFilter_shouldDefaultRoleToUserWhenRoleClaimMissing() {
+        // 角色同样只认 JWT：claim 缺失时下发 user，客户端伪造的 X-User-Role 被丢弃
+        String token = Jwts.builder()
+                .subject("u-1001")
+                .issuer(gatewayAuthProperties.getJwt().getIssuer())
+                .audience().add(gatewayAuthProperties.getJwt().getAudience()).and()
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
+                .compact();
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header("X-User-Role", "ADMIN")
+                        .build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        ArgumentCaptor<org.springframework.web.server.ServerWebExchange> captor =
+                ArgumentCaptor.forClass(org.springframework.web.server.ServerWebExchange.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(chain).filter(captor.capture());
+        assertThat(captor.getValue().getRequest().getHeaders().getFirst("X-User-Role")).isEqualTo("user");
+    }
+
+    @Test
+    void jwtFilter_shouldIgnoreForgedRoleHeaderOnPermitAllPath() {
+        // 白名单路径不注入身份，伪造的 X-User-Role 必须被清掉
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/auth/login")
+                        .header("X-User-Role", "ADMIN")
+                        .build());
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        ArgumentCaptor<org.springframework.web.server.ServerWebExchange> captor =
+                ArgumentCaptor.forClass(org.springframework.web.server.ServerWebExchange.class);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(jwtAuthenticationFilter.filter(exchange, chain)).verifyComplete();
+
+        verify(chain).filter(captor.capture());
+        assertThat(captor.getValue().getRequest().getHeaders().getFirst("X-User-Role")).isNull();
     }
 
     private String buildToken(String subject, String role) {

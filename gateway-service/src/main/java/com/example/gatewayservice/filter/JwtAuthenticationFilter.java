@@ -30,9 +30,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
-    private static final String UID_HEADER = "uid";
+
+    /** 网关注入的用户标识头，唯一来源是 JWT 标准 claim {@code sub} */
     private static final String USER_ID_HEADER = "X-User-Id";
+
+    /** 网关注入的角色头 */
     private static final String USER_ROLE_HEADER = "X-User-Role";
+
+    /** 历史非标准头，网关不再注入，仅用于清除客户端伪造值 */
+    private static final String LEGACY_UID_HEADER = "uid";
 
     private final GatewayAuthProperties gatewayAuthProperties;
     private final RedisBlacklistService redisBlacklistService;
@@ -75,6 +81,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 return unauthorized(exchange, "Token expired");
             }
 
+            // uid 固定取 JWT 标准 claim `sub`：auth-service 签发时把用户 uid 写进 sub，
+            // 不使用数据库自增主键，也没有可配置的 claim 名（见 gateway.auth.jwt 注释）
             String userId = claims.getSubject();
             if (!StringUtils.hasText(userId)) {
                 return unauthorized(exchange, "Missing uid in subject");
@@ -105,9 +113,6 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private Mono<Void> proceedWithRequest(ServerWebExchange exchange, GatewayFilterChain chain,
                                           ServerHttpRequest request, String userId, String userRole) {
-        final String resolvedUid = userId;
-        final String resolvedRole = userRole;
-
         ServerHttpRequest mutatedRequest = request.mutate()
                 .headers(headers -> {
                     headers.remove(REQUEST_ID_HEADER);
@@ -115,12 +120,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     if (StringUtils.hasText(requestId)) {
                         headers.set(REQUEST_ID_HEADER, requestId);
                     }
-                    headers.remove(UID_HEADER);
-                    headers.remove(USER_ID_HEADER);
-                    headers.remove(USER_ROLE_HEADER);
-                    headers.set(UID_HEADER, resolvedUid);
-                    headers.set(USER_ID_HEADER, resolvedUid);
-                    headers.set(USER_ROLE_HEADER, resolvedRole);
+                    // 先清掉客户端可能伪造的身份头，再写入网关校验后的可信值
+                    removeIdentityHeaders(headers);
+                    headers.set(USER_ID_HEADER, userId);
+                    headers.set(USER_ROLE_HEADER, userRole);
                 })
                 .build();
 
@@ -167,13 +170,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private ServerWebExchange stripIdentityHeaders(ServerWebExchange exchange) {
         ServerHttpRequest sanitized = exchange.getRequest().mutate()
-                .headers(headers -> {
-                    headers.remove(UID_HEADER);
-                    headers.remove(USER_ID_HEADER);
-                    headers.remove(USER_ROLE_HEADER);
-                })
+                .headers(this::removeIdentityHeaders)
                 .build();
         return exchange.mutate().request(sanitized).build();
+    }
+
+    /**
+     * 清除身份头（含历史非标准头 {@code uid}），确保下游只能看到网关注入的可信身份。
+     */
+    private void removeIdentityHeaders(HttpHeaders headers) {
+        headers.remove(USER_ID_HEADER);
+        headers.remove(USER_ROLE_HEADER);
+        headers.remove(LEGACY_UID_HEADER);
     }
 
     private String extractBearerToken(String authorizationHeader) {
@@ -192,10 +200,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return jws.getPayload();
     }
 
+    /**
+     * 未认证的错误码：与 auth / user / product / order 四个下游服务的
+     * `ErrorCode.UNAUTHORIZED(40101)` 保持一致，前端可用同一套错误码处理。
+     */
+    private static final int UNAUTHORIZED_CODE = 40101;
+
     private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         exchange.getResponse().getHeaders().set(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8");
-        String body = "{\"code\":401,\"message\":\"" + message + "\"}";
+        String body = "{\"code\":" + UNAUTHORIZED_CODE + ",\"message\":\"" + message + "\",\"data\":null}";
         return exchange.getResponse().writeWith(Mono.just(exchange.getResponse().bufferFactory()
                 .wrap(body.getBytes(StandardCharsets.UTF_8))));
     }
