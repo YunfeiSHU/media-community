@@ -43,6 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class ProductDomainIntegrationTest {
 
+    private static final String UID = "u-1001";
+
     @Autowired
     private ProductService productService;
 
@@ -230,8 +232,8 @@ class ProductDomainIntegrationTest {
     @Test
     @DisplayName("参数校验：非法商品类型 / 空更新")
     void invalidRequest() {
-        assertThatThrownBy(() -> productService.createProduct(
-                new CreateProductRequest("u-1", "商品", null, null, 99)))
+        assertThatThrownBy(() -> productService.createProduct(UID,
+                new CreateProductRequest("商品", null, null, 99)))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("非法的商品类型");
 
@@ -242,9 +244,31 @@ class ProductDomainIntegrationTest {
                 .hasMessageContaining("没有需要更新的字段");
     }
 
+    @Test
+    @DisplayName("创建商品：身份缺失 / 超长 uid 被拒绝")
+    void createProductRequiresValidUid() {
+        CreateProductRequest request = new CreateProductRequest("身份商品", null, null, ProductType.PHYSICAL.getCode());
+
+        assertThatThrownBy(() -> productService.createProduct(null, request))
+                .isInstanceOf(BizException.class)
+                .extracting(ex -> ((BizException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED);
+
+        assertThatThrownBy(() -> productService.createProduct("  ", request))
+                .isInstanceOf(BizException.class)
+                .extracting(ex -> ((BizException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED);
+
+        // 超过 product.uid 列宽 VARCHAR(32)
+        assertThatThrownBy(() -> productService.createProduct("u".repeat(33), request))
+                .isInstanceOf(BizException.class)
+                .extracting(ex -> ((BizException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_PARAM);
+    }
+
     private ProductDetailVO createProduct(String name) {
-        return productService.createProduct(new CreateProductRequest(
-                "u-1001", name, "商品描述", "https://cdn.example.com/cover.png", ProductType.PHYSICAL.getCode()));
+        return productService.createProduct(UID, new CreateProductRequest(
+                name, "商品描述", "https://cdn.example.com/cover.png", ProductType.PHYSICAL.getCode()));
     }
 
     private SkuVO createSku(String productId, String name, Long price, Integer stock) {

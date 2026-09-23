@@ -50,55 +50,71 @@ product（商品是什么、属于谁） 1 ──── N sku（卖什么规格�
 统一响应结构：`{"code":0,"message":"success","data":{...}}`；失败时 `code` 为业务错误码，
 HTTP 状态码与错误码前三位一致（400/404/409/500）。
 
-| 功能 | 方法 | 接口 |
-| --- | --- | --- |
-| 创建商品 | POST | `/api/v1/products` |
-| 商品详情 | GET | `/api/v1/products/{id}` |
-| 修改商品 | PUT | `/api/v1/products/{id}` |
-| 删除商品 | DELETE | `/api/v1/products/{id}` |
-| 上架 | POST | `/api/v1/products/{id}/on-shelf` |
-| 下架 | POST | `/api/v1/products/{id}/off-shelf` |
-| 创建 SKU | POST | `/api/v1/products/{id}/skus` |
-| SKU详情 | GET | `/api/v1/skus/{id}` |
-| 修改 SKU | PUT | `/api/v1/skus/{id}` |
-| 删除 SKU | DELETE | `/api/v1/skus/{id}` |
-| 当前价格查询 | GET | `/api/v1/skus/{id}/price` |
-| 修改价格 | PUT | `/api/v1/skus/{id}/price` |
-| 查询库存 | GET | `/api/v1/skus/{id}/stock` |
-| 增加库存 | POST | `/api/v1/skus/{id}/stock/increase` |
-| 库存扣减（预占） | POST | `/api/v1/skus/{id}/stock/reserve` |
-| 库存释放 | POST | `/api/v1/skus/{id}/stock/release` |
-| 确认扣减 | POST | `/api/v1/skus/{id}/stock/confirm` |
+| 功能 | 方法 | 接口 | 要求 |
+| --- | --- | --- | --- |
+| 创建商品 | POST | `/api/v1/products` | 登录（`X-User-Id`） |
+| 商品详情 | GET | `/api/v1/products/{id}` | 公开 |
+| 修改商品 | PUT | `/api/v1/products/{id}` | 仅创建者 |
+| 删除商品 | DELETE | `/api/v1/products/{id}` | 仅创建者 |
+| 上架 | POST | `/api/v1/products/{id}/on-shelf` | 仅创建者 |
+| 下架 | POST | `/api/v1/products/{id}/off-shelf` | 仅创建者 |
+| 创建 SKU | POST | `/api/v1/products/{id}/skus` | 仅创建者 |
+| SKU详情 | GET | `/api/v1/skus/{id}` | 公开 |
+| 修改 SKU | PUT | `/api/v1/skus/{id}` | 仅创建者 |
+| 删除 SKU | DELETE | `/api/v1/skus/{id}` | 仅创建者 |
+| 当前价格查询 | GET | `/api/v1/skus/{id}/price` | 公开 |
+| 修改价格 | PUT | `/api/v1/skus/{id}/price` | 仅创建者 |
+| 查询库存 | GET | `/api/v1/skus/{id}/stock` | 公开 |
+| 增加库存 | POST | `/api/v1/skus/{id}/stock/increase` | 仅创建者 |
+| 库存扣减（预占） | POST | `/api/v1/skus/{id}/stock/reserve` | 仅创建者 |
+| 库存释放 | POST | `/api/v1/skus/{id}/stock/release` | 仅创建者 |
+| 确认扣减 | POST | `/api/v1/skus/{id}/stock/confirm` | 仅创建者 |
+
+“仅创建者”指 `product.uid` 必须等于网关注入的 `X-User-Id`，由
+[`ProductOwnership`](src/main/java/com/example/product/support/ProductOwnership.java) 统一校验；
+不匹配时返回 `403 / 40301`（`无权操作他人商品: P…`）。SKU/价格/库存的归属按其所属商品判断。
+只读查询（商品详情、SKU 详情、价格、库存）仍对所有人开放；
+Dubbo 侧的 `ProductRpcService` / `StockRpcService` 是交易链路入口，没有用户上下文，**不做归属校验**。
 
 `{id}` 同时支持**内部主键**（纯数字，如 `1`）与**业务编号**（如 `P2QP...`、`S2QP...`），
 由 `Identifiers` + `EntityLookup` 统一解析，方便前端拿到哪种就用哪种。
 
-错误码：`40001` 参数不合法，`40401/40402/40403` 商品/SKU/库存不存在，
+错误码：`40001` 参数不合法，`40101` 未登录（缺 `X-User-Id` 头），`40301` 没有操作权限（不是商品创建者 / 角色不足），
+`40401/40402/40403` 商品/SKU/库存不存在，
 `40901/40902` 商品/SKU 状态冲突，`40903` 可用库存不足，`40904` 锁定库存不足，`50000` 系统异常。
+
+> 当前用户（uid）**只从网关注入的 `X-User-Id` 头取**（值 = JWT 的 `sub`，见
+> `com.example.product.common.CurrentUser`），不解析 JWT、也不接受请求体里的 `uid`。
+> 直连 8081 调试写接口时需自带 `-H "X-User-Id: u-1001"`；
+> 用**非创建者**的 uid 调写接口会得到 `403 / 40301`。
+>
+> 角色（`ADMIN` / `user`）同理：**唯一来源是网关注入的 `X-User-Role`**（值 = JWT 的 `role` claim），
+> 通过 `CurrentUser.role()` 读取；需要管理员权限时用 `CurrentUser.requireAdmin()`（角色不足返回 `403 / 40301`）。
+> 角色不等于归属：即使 `ADMIN`，写接口仍要求是该商品的创建者。
 
 ### 调用示例
 
 ```bash
-# 创建商品
-curl -X POST http://localhost:8081/api/v1/products -H "Content-Type: application/json" -d '{
-  "uid": "u-1001", "name": "iPhone 17", "description": "新品",
+# 创建商品（创建者 = 网关注入的 X-User-Id，请求体里没有 uid）
+curl -X POST http://localhost:8081/api/v1/products -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{
+  "name": "iPhone 17", "description": "新品",
   "coverUrl": "https://cdn.example.com/1.png", "productType": 1 }'
 
-# 创建 SKU（初始库存 10）
-curl -X POST http://localhost:8081/api/v1/products/{productId}/skus -H "Content-Type: application/json" \
+# 创建 SKU（初始库存 10，需为商品创建者）
+curl -X POST http://localhost:8081/api/v1/products/{productId}/skus -H "X-User-Id: u-1001" -H "Content-Type: application/json" \
   -d '{"name": "256G 黑色", "price": 699900, "initialStock": 10}'
 
-# 上架 / 下架
-curl -X POST http://localhost:8081/api/v1/products/{productId}/on-shelf
-curl -X POST http://localhost:8081/api/v1/products/{productId}/off-shelf
+# 上架 / 下架（需为商品创建者）
+curl -X POST http://localhost:8081/api/v1/products/{productId}/on-shelf -H "X-User-Id: u-1001"
+curl -X POST http://localhost:8081/api/v1/products/{productId}/off-shelf -H "X-User-Id: u-1001"
 
 # 价格
-curl -X PUT http://localhost:8081/api/v1/skus/{skuId}/price -H "Content-Type: application/json" -d '{"price": 699900}'
+curl -X PUT http://localhost:8081/api/v1/skus/{skuId}/price -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"price": 699900}'
 
-# 库存：扣减 / 释放 / 增加
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/reserve -H "Content-Type: application/json" -d '{"quantity": 2}'
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/release -H "Content-Type: application/json" -d '{"quantity": 2}'
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/increase -H "Content-Type: application/json" -d '{"quantity": 100}'
+# 库存：扣减 / 释放 / 增加（HTTP 镜像接口，需为商品创建者）
+curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/reserve -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
+curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/release -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
+curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/increase -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 100}'
 ```
 
 ## 4. Dubbo 接口
@@ -178,7 +194,11 @@ mvn test
 
 - `ProductDomainIntegrationTest`：领域服务 + RPC 服务的集成测试（H2 内存库 + 方法级事务回滚），
   覆盖商品 CRUD/上下架/级联删除、SKU CRUD、价格读写、库存四种变更与不足场景、RPC 契约。
-- `ProductHttpApiTest`：MockMvc 契约测试，逐个校验设计方案中约定的路由、响应结构与错误码映射。
+- `ProductHttpApiTest`：MockMvc 契约测试，逐个校验设计方案中约定的路由、响应结构与错误码映射；
+  并单独覆盖**归属校验**（非创建者调 12 个写接口一律 `403 / 40301`，只读接口仍开放，创建者本人正常操作）。
+- `CurrentUserTest`：身份/角色只从网关注入头解析的单元测试（缺身份 → `40101`，角色不匹配 → `40301`）。
+
+当前共 19 个测试用例，`mvn test` 全绿。
 
 ## 8. 日志与链路追踪
 
@@ -241,8 +261,9 @@ gateway:
       - GET /api/v1/skus/*       # Ant 的 * 只匹配单段，/skus/{id}/price、/stock 仍需 JWT
 ```
 
-> 白名单分支会先清除客户端可能伪造的 `uid` / `X-User-Id` / `X-User-Role` 再放行，
+> 白名单分支会先清除客户端可能伪造的 `X-User-Id` / `X-User-Role`（以及历史头 `uid`）再放行，
 > 因此**不要期望在白名单接口里读到用户身份**；需要用户身份的接口必须走鉴权。
 >
-> 经网关访问时代码里的 `X-User-Id` / `X-User-Role` 由网关注入，服务本身不做 JWT 校验——
+> 经网关访问时代码里的 `X-User-Id` / `X-User-Role` 由网关注入（网关仅注入这两个头，
+> 不再下发非标准头 `uid`；uid 固定取 JWT 标准 claim `sub`），服务本身不做 JWT 校验——
 > 直连 8081 会绕过鉴权，生产环境应保证该端口不对外暴露。

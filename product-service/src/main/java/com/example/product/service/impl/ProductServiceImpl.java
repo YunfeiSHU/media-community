@@ -1,6 +1,7 @@
 package com.example.product.service.impl;
 
 import com.example.product.common.BizException;
+import com.example.product.common.CurrentUser;
 import com.example.product.common.ErrorCode;
 import com.example.product.common.IdGenerator;
 import com.example.product.domain.entity.Inventory;
@@ -41,12 +42,14 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ProductDetailVO createProduct(CreateProductRequest request) {
+    public ProductDetailVO createProduct(String uid, CreateProductRequest request) {
+        // 创建者只能来自网关注入的身份（JWT sub），不接受请求体里的 uid
+        String currentUid = CurrentUser.requireUid(uid);
         ProductType.of(request.productType());
 
         Product product = new Product();
         product.setProductId(IdGenerator.nextProductId());
-        product.setUid(request.uid().trim());
+        product.setUid(currentUid);
         product.setName(request.name().trim());
         product.setDescription(request.description());
         product.setCoverUrl(request.coverUrl());

@@ -9,8 +9,12 @@ import com.example.product.dto.response.ProductDetailVO;
  */
 public interface ProductService {
 
-    /** 创建商品，初始状态为「下架」 */
-    ProductDetailVO createProduct(CreateProductRequest request);
+    /**
+     * 创建商品，初始状态为「下架」。
+     *
+     * @param uid 当前登录用户 uid，由网关注入的 {@code X-User-Id} 得到，不能来自请求体
+     */
+    ProductDetailVO createProduct(String uid, CreateProductRequest request);
 
     /** 商品详情（含 SKU 与库存快照），{@code id} 支持内部ID或业务编号 */
     ProductDetailVO getProduct(String id);

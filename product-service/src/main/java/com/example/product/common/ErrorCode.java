@@ -9,6 +9,9 @@ public enum ErrorCode {
 
     INVALID_PARAM(40001, "请求参数不合法", HttpStatus.BAD_REQUEST),
 
+    UNAUTHORIZED(40101, "未登录或登录已过期", HttpStatus.UNAUTHORIZED),
+    FORBIDDEN(40301, "没有操作权限", HttpStatus.FORBIDDEN),
+
     PRODUCT_NOT_FOUND(40401, "商品不存在", HttpStatus.NOT_FOUND),
     SKU_NOT_FOUND(40402, "SKU不存在", HttpStatus.NOT_FOUND),
     INVENTORY_NOT_FOUND(40403, "库存记录不存在", HttpStatus.NOT_FOUND),
