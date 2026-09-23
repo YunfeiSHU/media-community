@@ -27,7 +27,7 @@
 
 | 服务 | 端口 | 说明 |
 | --- | --- | --- |
-| gateway-service | 8000 | JWT 校验 + 注入 `uid` / `X-User-Id` / `X-User-Role` |
+| gateway-service | 8000 | JWT 校验 + 注入 `X-User-Id` / `X-User-Role`（uid 取 JWT 标准 claim `sub`） |
 | user-service | 8001 | |
 | auth-service | 8002 | |
 | product-service | 8003 | Dubbo provider，暴露 `ProductRpcService` / `StockRpcService`（20880） |
@@ -66,7 +66,10 @@ src/main/java/com/example/order
 ## 4. HTTP 接口
 
 所有接口统一返回 `ApiResponse`：`{"code": 0, "message": "success", "data": ...}`。
-除支付回调外都要求登录 —— 身份来自网关注入的 `uid` 头，**服务端不接受请求体里的用户标识**。
+除支付回调外都要求登录 —— 身份来自网关注入的 `X-User-Id` 头（值 = JWT 的 `sub`），
+**服务端不接受请求体里的用户标识**；缺头返回 `401 / 40101`。
+角色同理只读网关注入的 `X-User-Role`（值 = JWT 的 `role` claim，入口 `CurrentUser.role()`）；
+订单接口目前均未按角色鉴权。
 
 | 方法 | 路径 | 用途 | 登录 |
 | --- | --- | --- | --- |
@@ -83,7 +86,7 @@ src/main/java/com/example/order
 
 ```http
 POST /api/v1/orders
-uid: u-1001
+X-User-Id: u-1001
 Content-Type: application/json
 
 {
@@ -122,7 +125,7 @@ Content-Type: application/json
 
 ```http
 POST /api/v1/orders/O2AB7K9Q3X1M/pay
-uid: u-1001
+X-User-Id: u-1001
 
 {"paymentChannel": 1}      // 1-微信 2-支付宝 3-余额
 ```
@@ -156,11 +159,14 @@ amount={amount}&paymentChannel={paymentChannel}&paymentId={paymentId}&tradeStatu
 
 ### 4.4 错误码
 
+错误码规范与 auth / user / product 服务一致：`40001` 参数、`40101` 未认证、`40301` 无权限、`404xx` 不存在、`409xx` 冲突、`50000` 内部错误。
+
 | code | HTTP | 含义 |
 | --- | --- | --- |
 | 40001 | 400 | 请求参数不合法（含渠道非法、重复 SKU、请求体格式错误） |
 | 40002 | 400 | 支付回调签名校验失败 |
 | 40101 | 401 | 未登录 / 缺少网关身份头 |
+| 40301 | 403 | 没有操作权限（已预置；当前订单接口按 `X-User-Id` 判定归属，无需按角色鉴权） |
 | 40401 | 404 | 订单不存在（**他人订单一律按不存在处理**，不泄露资源存在性） |
 | 40402 | 404 | 支付单不存在 |
 | 40403 / 40404 | 404 | 商品不存在 / SKU 不存在（RPC 返回 null） |

@@ -3,7 +3,11 @@ package com.example.order.common;
 import org.springframework.http.HttpStatus;
 
 /**
- * 业务错误码。前三位与 HTTP 状态码保持一致，便于网关/前端统一处理。
+ * 业务错误码。
+ *
+ * <p>跨服务统一规范（auth / user / product / order 一致）：
+ * 40001 参数、40101 未认证、40301 无权限、404xx 不存在、409xx 冲突、50000 内部错误；
+ * 前三位与 HTTP 状态码保持一致，便于网关/前端统一处理。
  */
 public enum ErrorCode {
 
@@ -11,6 +15,7 @@ public enum ErrorCode {
     INVALID_PAYMENT_SIGN(40002, "支付回调签名校验失败", HttpStatus.BAD_REQUEST),
 
     UNAUTHORIZED(40101, "未登录或登录已过期", HttpStatus.UNAUTHORIZED),
+    FORBIDDEN(40301, "没有操作权限", HttpStatus.FORBIDDEN),
 
     ORDER_NOT_FOUND(40401, "订单不存在", HttpStatus.NOT_FOUND),
     PAYMENT_NOT_FOUND(40402, "支付单不存在", HttpStatus.NOT_FOUND),
