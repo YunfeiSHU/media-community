@@ -1,10 +1,11 @@
 package com.example.authservice.verification.provider;
 
-import com.example.authservice.verification.enums.VerificationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import com.example.authservice.verification.enums.VerificationType;
 
 /**
  * 短信验证码下发（<b>桩实现</b>：没有接真实短信通道，只打日志）。

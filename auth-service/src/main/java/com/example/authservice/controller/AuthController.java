@@ -7,14 +7,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.authservice.common.ApiResponse;
+import com.example.authservice.common.CurrentUser;
 import com.example.authservice.dto.EmailRegisterRequest;
 import com.example.authservice.dto.LoginRequest;
 import com.example.authservice.dto.LoginResponse;
 import com.example.authservice.dto.PhoneRegisterRequest;
 import com.example.authservice.dto.RefreshTokenRequest;
 import com.example.authservice.dto.SendVerificationRequest;
-import com.example.authservice.common.ApiResponse;
-import com.example.authservice.common.CurrentUser;
 import com.example.authservice.service.AuthService;
 import com.example.authservice.service.LoginRateLimitService;
 import com.example.authservice.service.VerificationService;
