@@ -34,8 +34,9 @@ public class ProductRpcClient {
      * 商品域 RPC 引用。
      *
      * <p>本地联调走 {@code order.rpc.product-url} 直连 product-service（其 registry.address=N/A，
-     * 不走注册中心）；切到 Nacos 注册中心时，把该注解的 {@code url} 属性删掉、并把
-     * {@code dubbo.registry.address} 配成 {@code nacos://...} 即可自动发现。
+     * 不走注册中心）；切到 Nacos 注册中心时，把 {@code dubbo.registry.address} 配成 {@code nacos://...}
+     * 并<b>删掉</b> {@code order.rpc.product-url} 这一项（或删掉本注解的 {@code url} 属性，二者等价）。
+     * 只把配置“置空”不够：Dubbo 里 {@code url} 的优先级高于注册中心软负载，会继续直连。
      *
      * <p>{@code lazy = true}：连接推迟到首次调用，避免启动阶段就去连 provider，
      * 与 {@code check = false} 一起保证 provider 未就绪时本服务仍能正常启动。

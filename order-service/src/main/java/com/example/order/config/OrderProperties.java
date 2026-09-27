@@ -25,7 +25,13 @@ public class OrderProperties {
     @Data
     public static class Rpc {
 
-        /** product-service 的 Dubbo 直连地址，如 {@code dubbo://127.0.0.1:20880}；为空则依赖注册中心发现 */
+        /**
+         * product-service 的 Dubbo 直连地址，如 {@code dubbo://127.0.0.1:20880}。
+         *
+         * <p>该值会直接注入 {@code @DubboReference(url = ...)}，而 Dubbo 中 url 的优先级高于注册中心，
+         * 所以要改成“走注册中心发现”时必须<b>删掉配置项</b>（让占位符回落到默认值不可行），
+         * 而不是把它置为空串：空串会让 Dubbo 拿不到合法 url 而启动失败。
+         */
         private String productUrl = "dubbo://127.0.0.1:20880";
     }
 
@@ -33,7 +39,12 @@ public class OrderProperties {
     @Data
     public static class Payment {
 
-        /** 支付回调验签密钥（HmacSHA256），为空表示跳过验签（仅本地联调使用） */
+        /**
+         * 支付回调验签密钥（HmacSHA256）。
+         *
+         * <p>默认空串：此时 {@code PaymentSigner} 跳过验签并列日志告警，仅供本地联调；
+         * 生产必须配置（回调接口免登录，验签是它唯一的鉴权手段）。
+         */
         private String callbackSecret = "";
     }
 

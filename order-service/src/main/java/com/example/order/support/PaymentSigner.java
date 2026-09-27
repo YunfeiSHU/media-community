@@ -11,6 +11,7 @@ import java.util.HexFormat;
 import java.util.Locale;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,16 @@ import org.springframework.stereotype.Component;
  *
  * <p>算法：{@code HmacSHA256(secret, canonical)}，{@code canonical} 为按字段名升序拼接的
  * {@code key=value&...} 串（见 {@link PaymentCallbackRequest} 的类注释）。
- * 密钥由 {@code order.payment.callback-secret} 配置；未配置时跳过验签（仅限本地联调，生产必须配置）。
+ * 密钥由 {@code order.payment.callback-secret} 配置。
+ *
+ * <p><b>安全前提</b>：{@code POST /api/v1/payments/callback} 在网关白名单里（没有 JWT，因为调用方是支付渠道），
+ * 所以验签是这条链路<b>唯一</b>的鉴权手段。必须满足：
+ * <ul>
+ *     <li>生产环境通过环境变量 {@code PAYMENT_CALLBACK_SECRET} 配置真实密钥，不能留空；</li>
+ *     <li>密钥不能是仓库里能查到的固定值（所以 yml 里没有写默认值）；</li>
+ *     <li>回调服务只允许渠道 IP 访问（网络层限制），并配合下面的金额/流水号/状态校验一起使用。</li>
+ * </ul>
+ * 未配置密钥时本类会跳过验签（仅限本地联调），启动与每次回调都会打出 WARN 提醒。
  */
 @Slf4j
 @Component
@@ -30,6 +40,20 @@ public class PaymentSigner {
     private static final String ALGORITHM = "HmacSHA256";
 
     private final OrderProperties properties;
+
+    /**
+     * 启动时就把“未启用验签”这个配置问题显式暴露出来。
+     *
+     * <p>不做成启动失败：本地联调与自动化测试就是需要能直接发回调，
+     * 但必须让人在启动日志里一眼看到风险，而不是等到被刷单了才发现。
+     */
+    @PostConstruct
+    void warnIfSignatureDisabled() {
+        if (!enabled()) {
+            log.warn("支付回调验签未启用（order.payment.callback-secret 为空）："
+                    + "POST /api/v1/payments/callback 会接受任意报文，仅限本地联调，生产必须配置 PAYMENT_CALLBACK_SECRET");
+        }
+    }
 
     /** 是否启用了验签 */
     public boolean enabled() {

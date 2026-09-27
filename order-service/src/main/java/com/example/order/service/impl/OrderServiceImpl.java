@@ -43,10 +43,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ul>
  *     <li><b>价格只信服务端</b>：下单时通过 RPC 读取 SKU 售价与商品信息并写入 order_item 快照，
  *     客户端提交的价格一律忽略</li>
- *     <li><b>库存预占与补偿</b>：RPC 不在本地事务内，预占失败要显式释放已成功的部分，避免锁定库存泄漏</li>
+ *     <li><b>库存预占与补偿</b>：预占失败要显式释放本次已成功的部分，避免锁定库存泄漏。
+ *     注意预占发生在 {@link #createOrder} 的本地事务<b>内部</b>（远程写操作会一直占着数据库连接），
+ *     属于学习项目的取舍，生产更宜用本地预占表 + 消息驱动最终一致</li>
  *     <li><b>状态流转走条件更新</b>：所有状态变更都用「WHERE 原状态 = X」的 UPDATE + 影响行数判定，
  *     天然抵御并发重复处理（重复回调、取消与支付竞争）</li>
- *     <li><b>副作用后置到事务提交之后</b>：取消类操作先提交订单状态，再释放库存</li>
+ *     <li><b>取消类副作用后置到事务提交之后</b>：只有「释放库存」通过
+ *     {@code TransactionSynchronization#afterCommit} 挪到提交后，因为它是不可回滚的远程副作用</li>
  * </ul>
  */
 @Slf4j
@@ -70,6 +73,13 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderProperties properties;
 
+    /**
+     * 创建订单。
+     *
+     * <p><b>已知取舍：没有幂等键</b>。客户端超时重试会真的产生两张订单并预占两次库存；
+     * 生产环境应当增加 {@code Idempotency-Key}（或客户端自带的订单号）+ 唯一索引，
+     * 重试时直接返回首次创建的结果。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderVO createOrder(String uid, CreateOrderRequest request) {
@@ -79,11 +89,18 @@ public class OrderServiceImpl implements OrderService {
         // 1. 通过 RPC 读取商品 / SKU，做可售性校验并计算金额（价格一律以 product-service 为准）
         List<OrderItem> items = new ArrayList<>(itemRequests.size());
         long totalAmount = 0L;
+        // 归一化后的再次去重：normalizeItems 只能按请求原文比较，
+        // 而 “12” 与 “S12abc” 可能指向同一个 SKU（EntityLookup 也接受内部数字 ID），
+        // 所以拿到 RPC 返回的业务编号后再去一次重
+        Set<String> resolvedSkuIds = new HashSet<>(itemRequests.size());
         for (OrderItemRequest itemRequest : itemRequests) {
             String skuId = itemRequest.skuId();
             SkuDTO sku = productRpcClient.getSku(skuId);
             if (sku == null) {
                 throw new BizException(ErrorCode.SKU_NOT_FOUND, "SKU不存在: " + skuId);
+            }
+            if (!resolvedSkuIds.add(sku.getSkuId())) {
+                throw new BizException(ErrorCode.INVALID_PARAM, "同一SKU不能重复提交: " + sku.getSkuId());
             }
             if (!SkuStatus.ENABLED.is(sku.getStatus())) {
                 throw new BizException(ErrorCode.SKU_STATUS_CONFLICT, "SKU当前不可售: " + skuId);
@@ -104,7 +121,9 @@ public class OrderServiceImpl implements OrderService {
 
             OrderItem item = new OrderItem();
             item.setProductId(product.getProductId());
-            item.setSkuId(skuId);
+            // 存 product-service 返回的业务编号，而不是请求里的原文：
+            // 请求里可能传的是内部数字 ID，原样入库会让同一 SKU 在库里出现两种写法
+            item.setSkuId(sku.getSkuId());
             item.setProductName(product.getName());
             item.setSkuName(sku.getName());
             item.setUnitPrice(sku.getPrice());
@@ -201,8 +220,14 @@ public class OrderServiceImpl implements OrderService {
     /**
      * {@inheritDoc}
      *
-     * <p>刻意不加 {@code @Transactional}：方法内会调用 RPC，避免把远程调用包进本地事务；
-     * 幂等由 {@code markCompleted} 的条件更新保证，重复执行只会成功一次。
+     * <p><b>关于事务</b>：本方法自身没有 {@code @Transactional}，但它的两个调用方都处在事务中
+     * （{@link #markPaid} 的同类自调用不会走上代理，{@code PaymentServiceImpl.handleCallback} 上有显式事务注解），
+     * 所以下面的 {@code confirmStock} 实际是<b>在数据库事务内</b>发出的远程调用——早期注释写反了，请以此为准。
+     *
+     * <p>幂等由 {@code markCompleted} 的条件更新保证，重复执行只会成功一次；
+     * 副作用顺序是「先确认库存、再改订单状态」，因此中途失败会停在 PAID，由补偿任务重试。
+     *
+     * <p>改进方向：把远程调用用 {@code TransactionSynchronization#afterCommit} 或本地消息表移出事务。
      */
     @Override
     public boolean completePaidOrder(String orderId) {
@@ -315,16 +340,22 @@ public class OrderServiceImpl implements OrderService {
         });
     }
 
-    /** 尽力而为地释放库存：失败只告警，不能让「取消订单」这个主流程失败 */
+    /**
+     * 尽力而为地释放库存：失败只告警，不能让「取消订单」这个主流程失败。
+     *
+     * <p>日志里的 {@code orderDbId} 是 {@code order}.id（自增主键）；
+     * 早期把它写成 {@code orderId=}，会让人以为是对外的业务编号 {@code order.order_id}，
+     * 排查时按错字段去查订单。
+     */
     private void releaseQuietly(List<OrderItem> items, String scene) {
         for (OrderItem item : items) {
             try {
                 if (!productRpcClient.releaseStock(item.getSkuId(), item.getQuantity())) {
-                    log.error("{}: 释放库存未生效，需对账补偿: orderId={}, skuId={}, quantity={}",
+                    log.error("{}: 释放库存未生效，需对账补偿: orderDbId={}, skuId={}, quantity={}",
                             scene, item.getOrderId(), item.getSkuId(), item.getQuantity());
                 }
             } catch (RuntimeException ex) {
-                log.error("{}: 释放库存调用异常，需对账补偿: orderId={}, skuId={}, quantity={}",
+                log.error("{}: 释放库存调用异常，需对账补偿: orderDbId={}, skuId={}, quantity={}",
                         scene, item.getOrderId(), item.getSkuId(), item.getQuantity(), ex);
             }
         }

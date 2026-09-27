@@ -29,6 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>处理顺序固定为：<b>验签 → 幂等判定 → 金额/流水号校验 → 状态流转 → 驱动订单状态机 → 留痕</b>。
  * 状态流转全部使用条件更新，因此渠道的重复回调（未收到应答会重试）天然幂等。
+ *
+ * <p><b>关于事务</b>：{@link #handleCallback} 上有 {@code @Transactional}，
+ * 而它通过 {@code orderService.markPaid} 间接调用了 {@code OrderServiceImpl#completePaidOrder}（内部会发 RPC），
+ * 所以“确认库存”这个远程调用实际上跑在本方法的事务里；方法本身不加事务挡不住这一点。
+ * 生产改进方向：把远程调用移到 {@code TransactionSynchronization#afterCommit} 或本地消息表。
  */
 @Slf4j
 @Service
@@ -62,6 +67,10 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // 幂等：已存在未支付的支付单则直接复用，避免用户反复点击生成多张支付单
+        //
+        // 注意这是「先查后插」，并发下两个线程可能都查不到、都插入，
+        // 从而同一订单出现两张 WAIT_PAY 支付单（表上（order_id, status）不能做唯一键：status 会变）。
+        // 生产可加 MySQL 8 生成列 + 唯一索引（status = 0 时取 order_id，否则取 NULL）来彻底消除这个竞态。
         PaymentOrder existing = paymentOrderMapper.selectWaitPayByOrderId(order.getOrderId());
         if (existing != null) {
             log.info("复用未支付的支付单: orderId={}, paymentId={}, paymentChannel={}",

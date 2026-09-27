@@ -23,7 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 订单相关 HTTP 接口。
  *
- * <p>登录态由网关保证：JWT 校验通过后注入 {@code uid} 头，服务从这里取当前用户，一律不接受请求体里的用户标识。
+ * <p>登录态由网关保证：JWT 校验通过后，网关把 claim {@code sub} 写入 {@code X-User-Id}、
+ * 把 {@code role} 写入 {@code X-User-Role}，服务只从这两个头取当前用户，
+ * 一律不接受请求体 / 查询参数里的用户标识与角色。
  */
 @RestController
 @RequestMapping("/api/v1/orders")
