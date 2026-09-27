@@ -128,37 +128,35 @@ foreach ($t in $targets) {
             continue
         }
 
-        # 2) 远端不存在则创建（--source 会自动加上 origin 并推送）
-        $exists = Test-GhRepoExists "$Owner/$($t.Name)"
-
-        if (-not $exists) {
-            Write-Host "  创建远端并推送 ..."
-            gh repo create "$Owner/$($t.Name)" "--$Visibility" --source . --remote origin --push
-            if ($LASTEXITCODE -ne 0) {
+        # 2) 保证远端存在。注意 gh repo view 偶尔会瞬时失败（例如连续多次 API 调用的突发中），
+        #    所以「探测失败」不能直接当成「不存在」；建仓失败后再探测一次，仍存在就说明只是抖动。
+        $full = "$Owner/$($t.Name)"
+        if (-not (Test-GhRepoExists $full)) {
+            Write-Host '  远端不存在，创建中 ...'
+            gh repo create $full "--$Visibility" 2>&1 | ForEach-Object { Write-Host "    $_" }
+            if ($LASTEXITCODE -ne 0 -and -not (Test-GhRepoExists $full)) {
                 Write-Host '  失败：gh repo create' -ForegroundColor Red
                 $failed += "$($t.Name)（创建失败）"
                 continue
             }
         }
-        else {
-            Write-Host "  远端已存在，直接推送 ..."
-            if (-not ((git remote) -contains 'origin')) { git remote add origin $remoteUrl }
-            git push -u origin $branch
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host '  失败：git push' -ForegroundColor Red
-                $failed += "$($t.Name)（推送失败）"
-                continue
-            }
+
+        # 3) 保证 origin 指向远端并推送（幂等：已存在/已推送时都是无副作用的空操作）
+        if (-not ((git remote) -contains 'origin')) { git remote add origin $remoteUrl }
+        git push -u origin $branch 2>&1 | ForEach-Object { Write-Host "    $_" }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '  失败：git push' -ForegroundColor Red
+            $failed += "$($t.Name)（推送失败）"
+            continue
         }
 
-        # 3) 初始 tag（可选）：让「可用版本」在远端有标记
+        # 4) 初始 tag（可选）：让「可用版本」在远端有标记
         if ($Tag -and -not (git tag)) {
             git tag -a $Tag -m "$($t.Name) $Tag"
-            git push origin $Tag
             Write-Host "  已打 tag：$Tag"
         }
 
-        # 4) 已有的 tag 一并推送
+        # 5) 已有的 tag 一并推送
         if (git tag) { git push origin --tags 2>&1 | Out-Null }
 
         Write-Host "  OK  https://github.com/$Owner/$($t.Name)" -ForegroundColor Green
