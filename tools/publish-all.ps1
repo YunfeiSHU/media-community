@@ -65,6 +65,15 @@ param(
 # 不能用 'Stop'：gh/git 写 stderr 会被 PowerShell 5.1 包成 ErrorRecord 并直接终止脚本。
 $ErrorActionPreference = 'Continue'
 
+# 把文本统一成 LF 换行。本机 core.autocrlf=true，聚合仓库又声明了 eol=lf，
+# 若生成的文件带 CRLF，每次 add 都会刷 "CRLF will be replaced by LF" 警告。
+# 而 here-string 的内容继承脚本自身的换行符，WriteAllLines 用的是 Environment.NewLine，
+# 所以生成的文本统一走这个函数收口。
+function ConvertTo-LfText {
+    param([string] $Text)
+    return (($Text -split "`r?`n") -join "`n")
+}
+
 # ---------------------------------------------------------------- 路径与账号
 $root = Split-Path $PSScriptRoot -Parent
 if (-not $PublishDir) { $PublishDir = Join-Path (Split-Path $root -Parent) $RepoName }
@@ -198,7 +207,7 @@ Desktop.ini
 .DS_Store
 '@
     # 无 BOM：.gitignore 带 BOM 会让第一条规则失效
-    [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitignore'), $gitignore, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitignore'), (ConvertTo-LfText $gitignore), [System.Text.UTF8Encoding]::new($false))
     Write-Host '  写入 .gitignore'
 
     # 统一换行符为 LF。本机 core.autocrlf=true 时，若不声明，每次 add 都会对几百个
@@ -208,7 +217,7 @@ Desktop.ini
 # 统一以 LF 入库并在检出时保持 LF，避免 Windows 上 core.autocrlf 带来的换行符抖动。
 * text=auto eol=lf
 '@
-    [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitattributes'), $gitattributes, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitattributes'), (ConvertTo-LfText $gitattributes), [System.Text.UTF8Encoding]::new($false))
     Write-Host '  写入 .gitattributes'
 
     # ------------------------------------------------------------ 3) AGGREGATE.md
@@ -260,7 +269,8 @@ Desktop.ini
     $lines.Add('- 8 个服务目录 —— `auth` / `gateway` / `user` / `product` / `order`（Java）、`video` / `live` / `danmaku`（Go）')
     $lines.Add('- 根目录 `*.md` —— 跨服务设计文档、接口测试文档、公共约定与问题记录')
     $lines.Add('')
-    [System.IO.File]::WriteAllLines((Join-Path $PublishDir 'AGGREGATE.md'), $lines, [System.Text.UTF8Encoding]::new($false))
+    # WriteAllLines 用的是 Environment.NewLine（Windows 下 = CRLF），这里改用 LF 写出
+    [System.IO.File]::WriteAllText((Join-Path $PublishDir 'AGGREGATE.md'), ((ConvertTo-LfText ($lines -join "`n")) + "`n"), [System.Text.UTF8Encoding]::new($false))
     Write-Host '  写入 AGGREGATE.md'
 
     # ------------------------------------------------------------ 4) 提交并推送
@@ -287,7 +297,7 @@ Desktop.ini
                 if ($versions[$k]) { $body.Add("- $k = $($versions[$k].Commit)") }
             }
             $msgFile = Join-Path $env:TEMP 'publish-all-msg.txt'
-            [System.IO.File]::WriteAllLines($msgFile, $body, [System.Text.UTF8Encoding]::new($false))
+            [System.IO.File]::WriteAllText($msgFile, ((ConvertTo-LfText ($body -join "`n")) + "`n"), [System.Text.UTF8Encoding]::new($false))
             git commit -F $msgFile 2>&1 | ForEach-Object { Write-Host "  $_" }
             Remove-Item $msgFile -Force
         }
