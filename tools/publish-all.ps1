@@ -201,6 +201,16 @@ Desktop.ini
     [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitignore'), $gitignore, [System.Text.UTF8Encoding]::new($false))
     Write-Host '  写入 .gitignore'
 
+    # 统一换行符为 LF。本机 core.autocrlf=true 时，若不声明，每次 add 都会对几百个
+    # 文件刷一行 "LF will be replaced by CRLF" 警告，噪音很大且没有意义。
+    $gitattributes = @'
+# 本文件由 tools/publish-all.ps1 自动生成，请勿手工编辑
+# 统一以 LF 入库并在检出时保持 LF，避免 Windows 上 core.autocrlf 带来的换行符抖动。
+* text=auto eol=lf
+'@
+    [System.IO.File]::WriteAllText((Join-Path $PublishDir '.gitattributes'), $gitattributes, [System.Text.UTF8Encoding]::new($false))
+    Write-Host '  写入 .gitattributes'
+
     # ------------------------------------------------------------ 3) AGGREGATE.md
     Write-Host '--- 3/4 生成 AGGREGATE.md（版本锚点）---' -ForegroundColor Cyan
     $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'
@@ -278,7 +288,7 @@ Desktop.ini
             }
             $msgFile = Join-Path $env:TEMP 'publish-all-msg.txt'
             [System.IO.File]::WriteAllLines($msgFile, $body, [System.Text.UTF8Encoding]::new($false))
-            git commit -F $msgFile 2>&1 | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
+            git commit -F $msgFile 2>&1 | ForEach-Object { Write-Host "  $_" }
             Remove-Item $msgFile -Force
         }
         else {
@@ -311,3 +321,7 @@ if ($DryRun) {
 else {
     Write-Host "完成：https://github.com/$Owner/$RepoName" -ForegroundColor Green
 }
+
+# 显式退出码：PowerShell 5.1 下 -File 的退出码会受前面原生命令的 $LASTEXITCODE 影响
+# （例如 gh repo view 探测「不存在」时会留下 1），所以这里明确收口。
+exit 0
