@@ -4,7 +4,9 @@
 
 ## Kubernetes 基础设施
 
-项目包含 Traefik、Kubernetes Service 和 Envoy sidecar 的基础部署清单，入口和部署步骤见 [infra/k8s/README.md](infra/k8s/README.md)。
+项目包含 Traefik、Kubernetes Service 和 Envoy sidecar 的基础部署清单，入口和部署步骤见 [`deploy/k8s/README.md`](../deploy/k8s/README.md)。
+
+整体部署（compose、环境变量、数据库基线）的总入口是 [`deploy/README.md`](../deploy/README.md)。
 
 容器镜像可以使用以下命令构建：
 
