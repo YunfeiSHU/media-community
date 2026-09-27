@@ -1,0 +1,62 @@
+# live-service-go 默认配置
+#
+# 所有值都支持 ${ENV:-default} 占位，由 internal/config 在解析前展开。
+# 因此「不设置任何环境变量」也能直接跑起来。
+#
+# 【数据层与 Java 体系共用】
+#   MySQL：同一个实例、同一个库 auth_service（与 auth/user/product/order 同库）
+#          Go 侧表统一带 media_ 前缀（本服务：media_live_room / media_live_record）
+#   Redis：同一个实例、同一个 db 0（与 gateway/auth 同一实例，Java 用 gateway:/auth: 前缀）
+#          本服务 key 统一带 live: 前缀
+
+app:
+  name: live-service
+  version: v1.0.0
+  port: 9002
+  mode: "${APP_ENV:-local}"          # local/dev/debug → 文本日志；其它 → JSON 日志 + release
+  shutdown_timeout: 10s
+
+mysql:
+  # 与 Java 共用：同一个 MySQL 实例、同一个 auth_service 库
+  dsn: "${LIVE_MYSQL_DSN:-root:***REMOVED***@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
+  max_open: 50
+  max_idle: 10
+  conn_max_lifetime: 30m
+  log_level: warn                     # silent | error | warn | info
+
+redis:
+  # 与 Java 共用：同一个 Redis 实例、同一个 db 0（靠 live: 前缀隔离）
+  addr: "${LIVE_REDIS_ADDR:-127.0.0.1:6379}"
+  password: "${LIVE_REDIS_PASSWORD:-}"
+  db: 0
+  pool_size: 20
+  dial_timeout: 3s
+
+events:
+  driver: "${LIVE_EVENTS_DRIVER:-rabbitmq}"     # rabbitmq | local
+  url: "${LIVE_RABBITMQ_URL:-amqp://admin:admin@127.0.0.1:5672/}"
+  exchange: "${LIVE_EVENTS_EXCHANGE:-go.media.live}"
+  prefetch: 10
+  retry: 3                            # 消费失败重试次数，超出进死信队列
+  idempotent_ttl: 1h
+
+# 媒体服务（SRS）适配器配置
+media:
+  driver: "${LIVE_MEDIA_DRIVER:-mock}"          # mock | srs
+  rtmp_host: "${LIVE_SRS_RTMP_HOST:-localhost}" # 返回给主播的宿主机名（容器内用外层地址）
+  # 注意：数值型占位符**不能加引号**。默认值是在 YAML 解析前做字符串替换的，
+  # 写成 "${X:-1936}" 展开后得到带引号的 "1936"，yaml.v3 无法把它解到 int 字段。
+  rtmp_port: ${LIVE_SRS_RTMP_PORT:-1936}
+  http_port: ${LIVE_SRS_HTTP_PORT:-8088}
+  webrtc_host: "${LIVE_SRS_WEBRTC_HOST:-localhost}"
+  webrtc_port: ${LIVE_SRS_WEBRTC_PORT:-8001}
+  api_base: "${LIVE_SRS_API_BASE:-http://127.0.0.1:1986}"  # SRS HTTP API（force-close 断流）
+  app: "${LIVE_SRS_APP:-live}"                  # 必须与 deploy/media/srs.conf 的 app 一致
+  hook_secret: "${LIVE_SRS_HOOK_SECRET:-}"       # 可选：回调共享密钥
+
+room:
+  max_per_owner: 20                   # 单主播最多创建的房间数
+  starting_timeout: 60s               # STARTING 超时未收到 on_publish → FAILED
+  online_ttl: 60s                     # 观众心跳有效期（建议心跳间隔为其 1/3）
+  cleanup_interval: 30s               # 在线人数清理 + 开播超时扫描周期
+  detail_cache_ttl: 30s               # 直播间详情缓存 TTL
