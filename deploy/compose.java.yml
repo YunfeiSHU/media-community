@@ -1,0 +1,139 @@
+# ===========================================================================
+# Java 体系：gateway / auth / user / product / order 五个服务
+#
+# 全部挂在 profile `java` 下（`docker compose --profile java up -d`）：
+# 一是构建慢（每个镜像都要在容器里跑一遍 Maven），二是日常开发用
+# `mvn spring-boot:run` / IDE 起更方便，容器化主要为了「一条命令起全栈」。
+#
+# 五个服务共同依赖：
+#   MySQL(auth_service 库) · Redis(db 0) · Nacos(8848/9848 服务注册)
+#
+# ★ 端口：各服务 application.yml 里的默认端口（gateway 8000 / user 8001 /
+#   auth 8002 / product 8003 / order 8004）。注意 auth 的 8002 是应用默认值，
+#   仓库里 deploy/k8s 那套清单历史上写的是 8080，已在对齐时改成 8002。
+#
+# ★ 环境变量覆盖：Spring Boot 的环境变量优先级高于 application.yml，
+#   所以即使 product/order 的 yml 里把 url/username/password 写成了字面量，
+#   下面用 SPRING_DATASOURCE_* 依然能覆盖成功。
+# ===========================================================================
+name: media-stack
+
+services:
+  # ------------------------------------------------------- gateway-service
+  gateway-service:
+    profiles: ["java"]
+    build:
+      context: ../gateway-service
+      dockerfile: Dockerfile
+    container_name: gomedia-gateway
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "8000"
+      SPRING_DATA_REDIS_HOST: ${INFRA_REDIS_HOST:-host.docker.internal}
+      SPRING_DATA_REDIS_PORT: "6379"
+      NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+    ports:
+      - "8000:8000"
+
+  # ---------------------------------------------------------- auth-service
+  auth-service:
+    profiles: ["java"]
+    build:
+      context: ../auth-service
+      dockerfile: Dockerfile
+    container_name: gomedia-auth
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "8002"
+      # 该服务的 schema.sql 会随启动自动执行（幂等，CREATE TABLE IF NOT EXISTS）
+      SPRING_SQL_INIT_MODE: always
+      SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      SPRING_DATA_REDIS_HOST: ${INFRA_REDIS_HOST:-host.docker.internal}
+      SPRING_DATA_REDIS_PORT: "6379"
+      NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      DUBBO_REGISTRY_ADDRESS: "nacos://${INFRA_NACOS_ADDR:-host.docker.internal:8848}"
+    ports:
+      - "8002:8002"
+
+  # ---------------------------------------------------------- user-service
+  user-service:
+    profiles: ["java"]
+    build:
+      context: ../user-service
+      dockerfile: Dockerfile
+    container_name: gomedia-user
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "8001"
+      # 该服务用的是自定义变量名 MYSQL_URL / MYSQL_USERNAME / MYSQL_PASSWORD
+      MYSQL_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+      MYSQL_USERNAME: ${SHARED_MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      SPRING_SQL_INIT_MODE: always
+      NACOS_REGISTRY_ADDRESS: "nacos://${INFRA_NACOS_ADDR:-host.docker.internal:8848}"
+      NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+    ports:
+      - "8001:8001"
+
+  # ------------------------------------------------------- product-service
+  product-service:
+    profiles: ["java"]
+    build:
+      context: ../product-service
+      dockerfile: Dockerfile
+    container_name: gomedia-product
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "8003"
+      # product/order 的 db/schema.sql 不会被 Spring 自动执行，需手工导入，
+      # 见 deploy/db/README.md
+      SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+    ports:
+      - "8003:8003"
+      # Dubbo 服务端口：order-service 直连它（见下面是 PRODUCT_RPC_URL）
+      - "20880:20880"
+
+  # --------------------------------------------------------- order-service
+  order-service:
+    profiles: ["java"]
+    build:
+      context: ../order-service
+      dockerfile: Dockerfile
+    container_name: gomedia-order
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "8004"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      # 单机直连：product-service 的 Dubbo 端口用服务名解析（不用注册中心）
+      PRODUCT_RPC_URL: "dubbo://product-service:20880"
+      PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-order-service-callback-secret}
+      NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+    ports:
+      - "8004:8004"

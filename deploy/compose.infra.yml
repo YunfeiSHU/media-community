@@ -1,0 +1,182 @@
+# ===========================================================================
+# 共用中间件：MySQL / Redis / RabbitMQ / MinIO / Nacos
+#
+# 全部挂在 profile `infra` 下，**默认一个都不启动**。原因：
+# 开发机上通常已经手工跑着这些容器（`docker ps` 可见 rabbitmq / minio /
+# nacos-standalone-derby，MySQL 与 Redis 装在宿主机上），默认启动会直接
+# 抢 3306 / 6379 / 5672 / 9000 / 8848 端口。**本机就是这种情况**，所以日常
+# 只需要 `docker compose up -d`（只起业务服务）。
+#
+# 只有在一台「什么都没有」的机器上，才需要这套自建中间件：
+#
+#     docker compose --profile infra up -d
+#
+# 起来之后必须按 deploy/README.md 的「自建模式」把 .env 里的 INFRA_* 从
+# host.docker.internal 改成服务名（mysql / redis / rabbitmq / minio / nacos），
+# 否则容器里的服务仍然会去连宿主机。
+# ===========================================================================
+name: media-stack
+
+services:
+  # ----------------------------------------------------------------- MySQL
+  # 与 Java 体系共用同一个实例、同一个库 auth_service，靠 media_ 表前缀隔离。
+  #
+  # 初始化脚本挂的是 Go 的 DDL 基线（./db/go/media-tables.sql，幂等），
+  # 只在「数据卷为空、首次初始化」时执行一次。三组表的来源分别是：
+  #   media_* 8 张          → 本 DDL 建（数据库名取自 MYSQL_DATABASE，
+  #                            DDL 里的 USE auth_service 要求它保持 auth_service）
+  #   account / user        → Spring 的 spring.sql.init.mode=always 自动建
+  #   product / order 等 7 张 → 需手工执行，见 deploy/db/README.md
+  mysql:
+    profiles: ["infra"]
+    image: mysql:8.0
+    container_name: gomedia-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      MYSQL_DATABASE: ${SHARED_MYSQL_DATABASE:-auth_service}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --max_connections=500
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/go:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # ----------------------------------------------------------------- Redis
+  # 与 Java 体系共用同一个实例、同一个 db 0，靠 key 前缀隔离
+  # （Java：auth: / gateway:；Go：video: / live: / danmaku:）。
+  #
+  # 刻意**不设密码**：宿主机上那套 Redis 就没有密码，两边保持一致，
+  # 免得出现「自建模式连不上、宿主机模式正常」这种只在一种模式下复现的问题。
+  redis:
+    profiles: ["infra"]
+    image: redis:7-alpine
+    container_name: gomedia-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # -------------------------------------------------------------- RabbitMQ
+  # Go 体系独有（Java 侧没有 MQ）：转码异步化、弹幕落库、直播事件分发。
+  # 注意 guest 用户只能从 localhost 登录，所以必须显式建一个 admin 用户。
+  rabbitmq:
+    profiles: ["infra"]
+    image: rabbitmq:3.13-management-alpine
+    container_name: gomedia-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "${RABBITMQ_HOST_PORT:-5672}:5672"           # AMQP
+      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"    # 管理台 http://localhost:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+
+  # ----------------------------------------------------------------- MinIO
+  # Go 体系独有：原片、HLS 分片、封面、直播录制。
+  # 控制台端口用 9090（宿主上已有 minio 容器占着 9001）。
+  minio:
+    profiles: ["infra"]
+    image: minio/minio:latest
+    container_name: gomedia-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9090"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_HOST_PORT:-9000}:9000"              # S3 API
+      - "${MINIO_CONSOLE_HOST_PORT:-9090}:9090"      # 控制台 http://localhost:9090
+    volumes:
+      - minio-data:/data
+    # 刻意不写 healthcheck：minio 镜像是精简的 UBI，不带 curl，
+    # 而它的 /minio/health/live 只能靠 curl 探，写一个永远失败的探针
+    # 会让容器一直是 unhealthy，还不如不写。就绪与否由 minio-init 自己重试等待。
+
+  # 初始化对象存储桶与访问策略（幂等，可重复执行）
+  minio-init:
+    profiles: ["infra"]
+    image: minio/mc:latest
+    container_name: gomedia-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MEDIA_BUCKET: ${MEDIA_BUCKET:-media}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "[minio-init] 等待 MinIO 就绪 ..."
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$MEDIA_BUCKET"
+        # HLS / .ts 分片要允许匿名读取，播放器才能直接拉取
+        mc anonymous set download "local/$$MEDIA_BUCKET" || true
+        echo "[minio-init] 完成，桶：$$MEDIA_BUCKET"
+
+  # ----------------------------------------------------------------- Nacos
+  # Java 五服务全部依赖它做服务注册（gateway 还用 lb:// 解析下游地址），
+  # 之前 compose 里缺这一项，导致 Java 侧完全无法脱离手工容器启动。
+  #
+  # 客户端 2.x 除了 8848（HTTP）还要连 9848（gRPC = 8848 + 1000），
+  # 端口映射少了 9848 会表现为「注册一直失败但报错很含糊」。
+  nacos:
+    profiles: ["infra"]
+    image: nacos/nacos-server:v2.3.0
+    container_name: gomedia-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+    ports:
+      - "${NACOS_HOST_PORT:-8848}:8848"                # 控制台 / OpenAPI
+      - "${NACOS_GRPC_HOST_PORT:-9848}:9848"           # gRPC（Nacos 2.x 客户端必需）
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:
+  minio-data:
+  nacos-data:

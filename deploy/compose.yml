@@ -1,0 +1,27 @@
+# ===========================================================================
+# 部署总入口 —— 整个项目（Java 5 个服务 + Go 3 个服务 + 共用中间件）唯一入口
+#
+# 本文件只做 include：把三组服务合成 **同一个** Compose 项目，
+# 因此容器之间可以直接用服务名互访（同一个默认网络）。
+#
+#   compose.infra.yml   共用中间件：MySQL / Redis / RabbitMQ / MinIO / Nacos   profile: infra
+#   compose.go.yml      Go 三服务 video / live / danmaku  +  SRS              默认 + profile: media
+#   compose.java.yml    Java 五服务 gateway / auth / user / product / order   profile: java
+#
+# 用法（先切到本目录，`.env` 会被自动读取）：
+#
+#   cd deploy
+#   docker compose up -d                      # Go 三服务（连宿主机上已有的中间件）
+#   docker compose --profile java up -d       # 再叠加 Java 五服务
+#   docker compose --profile media up -d      # 再叠加 SRS 直播媒体服务器
+#   docker compose --profile infra up -d      # 空机器：连中间件一起自建（需同步改 .env）
+#   docker compose down                       # 停止（-v 会连带清掉数据卷）
+#
+# 端口表、两套体系的关系、依赖顺序与排查入口见 deploy/README.md
+# ===========================================================================
+name: media-stack
+
+include:
+  - compose.infra.yml
+  - compose.go.yml
+  - compose.java.yml
