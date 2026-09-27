@@ -36,6 +36,14 @@ services:
       NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
+      # Go 三服务**没有接入 Nacos**（见 docs/Go微服务-公共约定.md），
+      # 网关侧对它们是直连 uri，所以必须显式给出容器内可达的地址。
+      # 同一个 Compose 项目（media-stack）内直接用服务名即可；
+      # 若 Go 服务跑在宿主机上而没进 Compose，就在 .env 里覆盖成
+      #   VIDEO_SERVICE_URI=http://host.docker.internal:9001
+      VIDEO_SERVICE_URI: ${VIDEO_SERVICE_URI:-http://video-service:9001}
+      LIVE_SERVICE_URI: ${LIVE_SERVICE_URI:-http://live-service:9002}
+      DANMAKU_SERVICE_URI: ${DANMAKU_SERVICE_URI:-http://danmaku-service:9003}
     ports:
       - "8000:8000"
 

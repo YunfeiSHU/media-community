@@ -164,16 +164,26 @@ Java 侧已占用、Go 侧**不得使用**的库内名字：表 `account` / `use
 | 归属校验 | 写操作校验资源所有者；ADMIN 不绕过归属，仅执行治理动作 |
 | 库隔离 | 一个服务一个库，不共表 |
 
-挂到现有网关只需加三条路由：
+挂到现有网关只要三条路由（**已落地**在 `gateway-service/src/main/resources/application.yml`）：
 
 ```yaml
 - id: video-service-go
-  uri: http://localhost:9001
-  predicates: [ Path=/api/v1/videos/**,/api/v1/categories/** ]
+  uri: ${VIDEO_SERVICE_URI:http://localhost:9001}
+  predicates:
+    - Path=/api/v1/categories/**,/api/v1/videos/**
 - id: live-service-go
-  uri: http://localhost:9002
-  predicates: [ Path=/api/v1/live/** ]
+  uri: ${LIVE_SERVICE_URI:http://localhost:9002}
+  predicates:
+    - Path=/api/v1/live/**
 - id: danmaku-service-go
-  uri: http://localhost:9003
-  predicates: [ Path=/api/v1/danmaku/**,/ws/danmaku ]
+  uri: ${DANMAKU_SERVICE_URI:http://localhost:9003}
+  predicates:
+    - Path=/api/v1/danmaku/**,/ws/danmaku
 ```
+
+> **必须直连 `uri`，不能写 `lb://`**：Go 三服务没有引入 Nacos 客户端，注册中心里没有它们，
+> `lb://` 会在选实例阶段因「无可用实例」直接 503。地址取自环境变量，容器 / 集群里改成服务名即可。
+>
+> 同时网关白名单（`gateway.auth.permit-all`）已按「方法 + 路径」补齐了三服务的**公开读接口**；
+> `/ws/danmaku` **不进白名单**，而是通过 `gateway.auth.jwt.token-query-paths` 支持 `?access_token=<JWT>`
+> ——浏览器 `new WebSocket(url)` 不能设置请求头。详见 [gateway-service/技术文档.md §10](../gateway-service/技术文档.md)。

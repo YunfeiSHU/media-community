@@ -142,7 +142,7 @@ graph TB
 
 | 服务 | 端口 | 体系 | 核心职责 | 详细文档 |
 | --- | --- | --- | --- | --- |
-| `gateway-service` | **8000** | Java | 统一入口：JWT 校验、路由转发（`lb://`）、限流、JWT 黑名单、白名单放行 | [技术文档](gateway-service/技术文档.md) · [网关架构](gateway-service/网关架构.md) |
+| `gateway-service` | **8000** | Java | 统一入口：JWT 校验、路由转发（Java 侧 `lb://`、Go 侧直连）、限流、JWT 黑名单、方法级白名单、WS 查询参数令牌 | [技术文档](gateway-service/技术文档.md) · [网关架构](gateway-service/网关架构.md) |
 | `auth-service` | **8002** | Java | 手机/邮箱注册登录、双令牌（access + refresh）、Refresh Token Rotation、注销与黑名单、验证码、管理员强制下线 | [技术方案](auth-service/技术方案.md) · [测试文档](auth-service/测试文档.md) |
 | `user-service` | **8001** | Java | 用户资料查询/修改/注销，管理员查询与状态管理；对外提供 Dubbo `UserDubboService` | [技术方案](user-service/技术方案.md) · [测试文档](user-service/测试文档.md) |
 | `product-service` | **8003**<br/>Dubbo **20880** | Java | 商品与 SKU 管理、价格、库存（可用/锁定两态）、上架下架；Dubbo 暴露商品与库存 RPC | [设计方案](product-service/设计方案.md) · [README](product-service/README.md) |
@@ -337,16 +337,34 @@ sequenceDiagram
 | `ANY` | `/api/v1/auth/**` | `lb://auth-service` |
 | `ANY` | `/api/v1/products/**`、`/api/v1/skus/**` | `lb://product-service` |
 | `ANY` | `/api/v1/orders/**`、`/api/v1/payments/**` | `lb://order-service` |
+| `ANY` | `/api/v1/categories/**`、`/api/v1/videos/**` | `video-service-go`（直连 `:9001`） |
+| `ANY` | `/api/v1/live/**` | `live-service-go`（直连 `:9002`） |
+| `ANY` | `/api/v1/danmaku/**`、`/ws/danmaku` | `danmaku-service-go`（直连 `:9003`） |
 | `GET` | `/actuator/health`、`/actuator/info`、`/actuator/gateway` | 网关自身端点 |
+
+> Java 五服务注册在 Nacos，网关按服务名负载均衡；**Go 三服务未接入 Nacos**，只能直连，
+> 地址由 `VIDEO_SERVICE_URI` / `LIVE_SERVICE_URI` / `DANMAKU_SERVICE_URI` 覆盖（默认 `http://localhost:900X`）。
 
 **JWT 白名单（免登录）**
 
 | 路径 | 说明 |
 | --- | --- |
 | `POST /api/v1/auth/login` | 登录 |
+| `POST /api/v1/auth/token/refresh` | 刷新令牌 |
+| `POST /api/v1/auth/verification/send` | 发验证码 |
+| `POST /api/v1/auth/register/phone`、`POST /api/v1/auth/register/email` | 注册 |
 | `GET /api/v1/products/*` | 商品详情（`*` 只匹配单段，不含 `/{id}/skus`） |
 | `GET /api/v1/skus/*` | SKU 详情（不含 `/price`、`/stock`） |
 | `POST /api/v1/payments/callback` | 支付渠道异步回调（会先清掉伪造的 `X-User-*` 头） |
+| `GET /api/v1/categories`、`GET /api/v1/videos`、`GET /api/v1/videos/*`、`GET /api/v1/videos/*/play` | 点播浏览 / 播放地址 |
+| `GET /api/v1/live/rooms`、`GET /api/v1/live/rooms/*`、`GET /api/v1/live/rooms/*/online`、`GET /api/v1/live/rooms/*/play` | 直播间列表 / 详情 / 在线人数 / 播放地址 |
+| `POST /api/v1/live/rooms/*/heartbeat` | 观播心跳 |
+| `POST /api/v1/live/hooks/**` | SRS 推流回调（服务间调用） |
+| `POST /api/v1/live/dev/**` | 本地推流联调接口（仅 debug 模式注册） |
+| `GET /api/v1/danmaku/rooms/*/history`、`GET /api/v1/danmaku/videos/*/history`、`GET /api/v1/danmaku/stats` | 弹幕历史 / 统计 |
+
+> `/ws/danmaku` **不在白名单**：它需要鉴权，令牌走查询参数 `?access_token=<JWT>`（浏览器 `new WebSocket(url)` 不能设置请求头）。
+> 校验链路与 Header 令牌完全相同，转发前会把 `access_token` 从 URL 上摘掉。
 
 #### 鉴权 `auth-service`（前缀 `/api/v1/auth`，全为 `POST`）
 
@@ -528,6 +546,29 @@ curl.exe http://localhost:9002/api/v1/live/rooms
 curl.exe http://localhost:9003/api/v1/danmaku/rooms/1/history
 ```
 
+**⑤ 经网关访问 Go 服务（验证路由与鉴权链路）**
+
+```powershell
+$BASE_GW = "http://localhost:8000"
+
+# 公开读接口：白名单放行，无需令牌
+curl.exe "$BASE_GW/api/v1/videos?page=1&size=10"
+curl.exe "$BASE_GW/api/v1/live/rooms"
+curl.exe "$BASE_GW/api/v1/danmaku/stats"
+
+# 需鉴权接口：不带令牌应得 401 / 40101（说明路由已通、鉴权已生效，而不是 404）
+curl.exe -i "$BASE_GW/api/v1/videos"
+curl.exe -i -X POST "$BASE_GW/api/v1/live/rooms" -H "Content-Type: application/json" -d '{}'
+
+# WebSocket：令牌只能走查询参数（浏览器 new WebSocket 不能设置请求头）
+# 未带令牌 → 401；带有效令牌 → 101 Switching Protocols
+curl.exe -i "$BASE_GW/ws/danmaku?roomId=5001"
+curl.exe -i "$BASE_GW/ws/danmaku?roomId=5001&access_token=$TOKEN"
+```
+
+> 若这里返回 `503`，说明网关连不上 Go 服务（先确认 `:900X` 已启动，或 `*_SERVICE_URI` 配错）；
+> 若返回 `404`，说明路由未命中，检查 `Path` 断言与请求路径的 `**` 匹配关系。
+
 ### 5.6 接口测试文档与自动化测试
 
 | 范围 | 文档 / 方式 |
@@ -535,6 +576,7 @@ curl.exe http://localhost:9003/api/v1/danmaku/rooms/1/history
 | product + order 全量接口测试（含失败场景、错误码逐条对应） | [`docs/接口测试文档-商品与订单.md`](docs/接口测试文档-商品与订单.md) |
 | auth / user 接口测试用例 | [auth 测试文档](auth-service/测试文档.md) · [user 测试文档](user-service/测试文档.md) |
 | Go 三服务接口契约 | [video](video-service-go/docs/接口文档.md) · [live](live-service-go/docs/接口文档.md) · [danmaku](danmaku-service-go/docs/接口文档.md) |
+| 网关路由与鉴权（含 Go 三服务、WebSocket 令牌） | `gateway-service` 下 `mvn test` → `GatewayGoRoutingTests`（60 例，直接读取真实 `application.yml`，配置漂移会导致构建失败） |
 | Java 单元 / 集成测试 | `mvn test`（JUnit 5 + MockMvc + H2） |
 | Go 单元测试 | `go test -race -count=1 ./...`（各服务目录下执行） |
 
@@ -591,7 +633,8 @@ media-community-backend/
 
 | 项 | 说明 |
 | --- | --- |
-| Go 三服务尚未接入网关 | `gateway-service` 目前只有 4 条路由（Java 体系）；接入 Go 服务只需新增 3 条 `lb://` 路由 |
+| Go 三服务未接入 Nacos | 网关已为它们配好 3 条路由，但因为是**直连 `uri`** 而非 `lb://`，地址变更需通过 `VIDEO_SERVICE_URI` / `LIVE_SERVICE_URI` / `DANMAKU_SERVICE_URI` 覆盖并重启网关，也拿不到负载均衡与自动扩缩容 |
+| 查询参数令牌会留在访问日志 | `/ws/danmaku?access_token=` 会进入客户端访问日志 / 浏览器历史；已通过「仅该路径允许 + 转发前摘除」收敛，更彻底的方案是一次性握手票据 |
 | 弹幕广播为单实例 | 弹幕 Hub 在进程内内存中维护，多实例部署需要引入 Redis Pub/Sub 做跨节点广播 |
 | 短信 / 邮件为学习模式 | `NotificationProvider` 未对接真实渠道，验证码直接回显在响应里 |
 | 转码默认 mock | `transcoder.driver=mock` 时不调用真实 FFmpeg；需要真实转码时改为 `real` 并安装 FFmpeg |
