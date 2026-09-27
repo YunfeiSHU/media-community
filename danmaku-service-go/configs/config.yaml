@@ -1,0 +1,75 @@
+# danmaku-service-go 配置
+#
+# 数据层与 Java 体系（auth / user / product / order）**共用**：
+#   - MySQL：同一个实例、同一个 auth_service 库，本服务表统一 media_ 前缀
+#   - Redis：同一个实例、同一个 db 0，本服务 key 统一 danmaku: 前缀
+# 因此这里不再提供「独立端口/实例」的默认值，改由占位符允许覆盖。
+#
+# 占位符语法：${ENV_NAME:-默认值}
+
+app:
+  name: danmaku-service
+  version: v1.0.0
+  port: ${DANMAKU_PORT:-9003}
+  mode: "${APP_ENV:-local}"
+  shutdown_timeout: 10s
+
+mysql:
+  # 与 Java 共用：同一个 MySQL 实例、同一个 auth_service 库（表名 media_danmaku / media_sensitive_word）
+  dsn: "${DANMAKU_MYSQL_DSN:-root:***REMOVED***@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
+  max_open: 50
+  max_idle: 10
+  conn_max_lifetime: 30m
+  log_level: warn
+
+redis:
+  # 与 Java 共用：同一个 Redis 实例、同一个 db 0（靠 danmaku: 前缀隔离）
+  addr: "${DANMAKU_REDIS_ADDR:-127.0.0.1:6379}"
+  password: "${DANMAKU_REDIS_PASSWORD:-}"
+  db: 0
+  pool_size: 20
+  dial_timeout: 3s
+
+events:
+  driver: "${DANMAKU_EVENTS_DRIVER:-rabbitmq}"
+  url: "${DANMAKU_RABBITMQ_URL:-amqp://admin:admin@127.0.0.1:5672/}"
+  exchange: "${DANMAKU_EVENTS_EXCHANGE:-go.media.danmaku}"
+  prefetch: 20
+  retry: 3
+  idempotent_ttl: 1h
+
+danmaku:
+  max_content_len: 100
+  hot_size: 500                      # Redis 热数据条数上限
+  hot_ttl: 2h
+  recall_window: 120s                # 发送后可撤回的时间窗（0 表示不限制）
+  dedup_ttl: 10s                     # clientMsgId 去重窗口
+  # 是否要求「房间明确处于直播中」才允许发弹幕。
+  #   收到 live.started → 状态=1（允许）；收到 live.stopped → 状态=0（拒绝）。
+  #   require_living=true ：状态未知（键不存在）也拒绝 —— 线上用，防伪造房间刷弹幕。
+  #   require_living=false：只有**明确为 0** 才拒绝，未知放行 —— 本地单独跑
+  #                         danmaku（没有 live-service 发事件）时不会把发送全拒掉。
+  require_living: false
+  max_persist_retry: 3               # MQ 投递失败时的立即重试次数
+
+ws:
+  read_buffer_size: 1024
+  write_buffer_size: 4096            # 每个连接的 send channel 容量（满则丢帧）
+  write_wait: 10s                    # 单帧写超时
+  pong_wait: 60s                     # 等待对端 Pong/任何帧的时限
+  ping_period: 30s                   # 服务端发 WebSocket Ping 的间隔
+  max_conns_per_user: 3              # 同一 uid 在同一房间的最大连接数，超出踢最旧
+  max_frame_bytes: 4096              # 单帧上限（防止超大帧打爆内存）
+  room_idle_grace: 60s               # Room 空置宽限期，到期后回收
+  janitor_interval: 30s              # 清理任务间隔
+  allowed_origins: "${DANMAKU_WS_ORIGINS:-*}"  # 逗号分隔；* 表示不校验来源
+
+ratelimit:
+  user_per_second: 5                 # 用户级：单用户 1 秒最多 5 条
+  room_per_second: 200               # 房间级：单房间 1 秒最多 200 条
+  window: 1s
+
+filter:
+  enabled: true
+  default_strategy: REJECT
+  reload_interval: 0s                # 0 表示只在启动与手动触发时加载
