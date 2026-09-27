@@ -44,10 +44,25 @@ param(
     [switch] $DryRun
 )
 
-$ErrorActionPreference = 'Stop'
+# 注意：不能用 'Stop'。PowerShell 5.1 会把原生命令（gh / git）写到 stderr 的内容包成
+# ErrorRecord，配合 'Stop' 会直接把脚本终止；而 `gh repo view` 在判断「仓库不存在」时
+# 本来就会往 stderr 写一行 GraphQL 错误（这属于预期分支，不是真的失败）。
+# 所以统一用 'Continue'，并在每个原生命令后显式检查 $LASTEXITCODE。
+$ErrorActionPreference = 'Continue'
 
 # ---------------------------------------------------------------- 定位工作区根
 $root = Split-Path $PSScriptRoot -Parent
+
+function Test-GhLoggedIn {
+    gh auth status 2>&1 | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Test-GhRepoExists {
+    param([string] $FullName)
+    gh repo view $FullName --json name 2>&1 | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
 
 # ---------------------------------------------------------------- 推断 Owner
 if (-not $Owner) {
@@ -81,8 +96,7 @@ Write-Host ''
 
 # ---------------------------------------------------------------- 前置：gh 已登录
 if (-not $DryRun) {
-    gh auth status *> $null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-GhLoggedIn)) {
         throw 'gh 未登录。请先执行： gh auth login --hostname github.com --git-protocol https --web'
     }
 }
@@ -115,8 +129,7 @@ foreach ($t in $targets) {
         }
 
         # 2) 远端不存在则创建（--source 会自动加上 origin 并推送）
-        gh repo view "$Owner/$($t.Name)" *> $null
-        $exists = ($LASTEXITCODE -eq 0)
+        $exists = Test-GhRepoExists "$Owner/$($t.Name)"
 
         if (-not $exists) {
             Write-Host "  创建远端并推送 ..."
