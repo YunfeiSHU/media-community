@@ -107,6 +107,28 @@ CREATE TABLE IF NOT EXISTS `media_transcode_task` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='视频转码任务';
 
+-- 分片上传会话：断点续传的锚点。
+-- 已上传分片的**权威数据在对象存储侧**（ListParts），本表只需要记住
+-- 「videoId → uploadId」这个映射，以及切片计划（part_size / total_parts）。
+CREATE TABLE IF NOT EXISTS `media_upload_session` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `video_id`    BIGINT UNSIGNED NOT NULL,
+  `owner_id`    VARCHAR(64)  NOT NULL COMMENT '来自 X-User-Id',
+  `object_key`  VARCHAR(512) NOT NULL COMMENT '原片在对象存储中的 key，同一视频的会话共用同一个 key',
+  `upload_id`   VARCHAR(255) NOT NULL COMMENT '对象存储侧的 multipart uploadId，断点续传的唯一入口',
+  `ext`         VARCHAR(16)  NOT NULL,
+  `file_size`   BIGINT       NOT NULL DEFAULT 0 COMMENT '客户端声明的原片总字节数',
+  `part_size`   BIGINT       NOT NULL DEFAULT 0 COMMENT '分片大小（字节），init 时由服务端算好',
+  `total_parts` BIGINT       NOT NULL DEFAULT 0 COMMENT '分片总数 = ceil(file_size / part_size)',
+  `status`      VARCHAR(16)  NOT NULL DEFAULT 'UPLOADING' COMMENT 'UPLOADING|COMPLETED|ABORTED',
+  `created_at`  DATETIME(3)  NULL,
+  `updated_at`  DATETIME(3)  NULL,
+  `deleted_at`  DATETIME(3)  NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_video` (`video_id`),
+  KEY `idx_deleted` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分片上传会话（断点续传）';
+
 -- ===========================================================================
 -- live-service-go
 -- ===========================================================================

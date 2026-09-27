@@ -186,7 +186,7 @@ docker compose --profile java --profile infra --profile media config   # 只看�
 | `user` | `user-service/src/main/resources/schema.sql` | ✅ 同上 |
 | `product` / `sku` / `inventory` | `product-service/src/main/resources/db/schema.sql` | ❌ **需手工导入** |
 | `order` / `order_item` / `payment_order` / `payment_record` | `order-service/src/main/resources/db/schema.sql` | ❌ **需手工导入** |
-| `media_*` 共 8 张 | `deploy/db/go/media-tables.sql` | ❌ 手工导入，或由 GORM `AutoMigrate` 自动建 |
+| `media_*` 共 9 张 | `deploy/db/go/media-tables.sql` | ❌ 手工导入，或由 GORM `AutoMigrate` 自动建 |
 
 完整说明、执行顺序与校验方法见 **[`db/README.md`](db/README.md)**。
 

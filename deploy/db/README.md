@@ -26,12 +26,13 @@ Java 五个服务与 Go 三个服务**共用同一个 MySQL 实例、同一个�
 | `media_video_category` | video-service-go | 同上 | 同上 |
 | `media_video_tag` | video-service-go | 同上 | 同上 |
 | `media_transcode_task` | video-service-go | 同上 | 同上 |
+| `media_upload_session` | video-service-go | 同上 | 同上 |
 | `media_live_room` | live-service-go | 同上 | 同上 |
 | `media_live_record` | live-service-go | 同上 | 同上 |
 | `media_danmaku` | danmaku-service-go | 同上 | 同上 |
 | `media_sensitive_word` | danmaku-service-go | 同上 | 同上 |
 
-合计 **17 张表**：Java 9 张 + Go 8 张。
+合计 **18 张表**：Java 9 张 + Go 9 张。
 
 > Java 的 DDL **没有搬到这里**，是故意的：auth / user 的 `schema.sql` 必须留在
 > classpath 根下（Spring 的 `spring.sql.init` 只从 classpath 找，且这两个服务配的是
@@ -49,7 +50,7 @@ $mysql = "mysql --user=root --host=127.0.0.1 --port=3306 --default-character-set
 #    排序规则必须与生产/开发一致，否则字符串比较行为不同
 mysql ... -e "CREATE DATABASE IF NOT EXISTS auth_service DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 
-# 1) Go 侧 8 张表（幂等，可重复执行）
+# 1) Go 侧 9 张表（幂等，可重复执行）
 cmd /c "mysql ... auth_service < deploy\db\go\media-tables.sql"
 
 # 2) Java 自动建的两张：不用管，启动 auth-service / user-service 时会自动执行
@@ -87,7 +88,7 @@ cmd /c "mysql ... auth_service < order-service\src\main\resources\db\schema.sql"
 `docker-entrypoint-initdb.d`，所以**只有数据卷为空时首次初始化**会执行里面的
 `media-tables.sql`：
 
-- `media_*` 8 张表 → 由它自动建好；
+- `media_*` 9 张表 → 由它自动建好；
 - `account` / `user` → 等 auth / user 服务启动时由 Spring 建；
 - `product` / `order` 那 7 张 → **仍需按上面第 3 步手工导入**（挂载目录里没有它们）。
 

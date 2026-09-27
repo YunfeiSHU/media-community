@@ -95,7 +95,7 @@ media-community-backend/          # 仓库根（8 个服务在本地各自是独
 
 | 服务 | 库 | 表（全部带 `media_` 前缀） |
 | --- | --- | --- |
-| video-service-go | `auth_service` | `media_video`、`media_video_category`、`media_video_tag`、`media_transcode_task` |
+| video-service-go | `auth_service` | `media_video`、`media_video_category`、`media_video_tag`、`media_transcode_task`、`media_upload_session` |
 | live-service-go | `auth_service` | `media_live_room`、`media_live_record` |
 | danmaku-service-go | `auth_service` | `media_danmaku`、`media_sensitive_word` |
 

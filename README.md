@@ -14,7 +14,7 @@
 一个**微服务架构**的音视频社区后端，覆盖「账号体系 + 电商交易 + 音视频媒体」三条完整业务链路：
 
 - **用户侧**：注册登录、资料管理、商品浏览、下单支付、视频点播、直播、弹幕互动
-- **媒体侧**：视频上传 → 异步转码 → 多码率 HLS 播放；RTMP 推流 → HLS / HTTP-FLV / WebRTC 拉流；WebSocket 弹幕实时广播
+- **媒体侧**：视频上传（小文件一次上传 / 大文件**分片上传 + 断点续传**）→ 异步转码 → 多码率 HLS 播放；RTMP 推流 → HLS / HTTP-FLV / WebRTC 拉流；WebSocket 弹幕实时广播
 
 项目由 **两套技术体系**组成，平铺部署在同一台机器上、**共用同一份数据层**，通过统一的网关、统一的响应结构与身份传递约定保持契约一致：
 
@@ -147,7 +147,7 @@ graph TB
 | `user-service` | **8001** | Java | 用户资料查询/修改/注销，管理员查询与状态管理；对外提供 Dubbo `UserDubboService` | [技术方案](user-service/技术方案.md) · [测试文档](user-service/测试文档.md) |
 | `product-service` | **8003**<br/>Dubbo **20880** | Java | 商品与 SKU 管理、价格、库存（可用/锁定两态）、上架下架；Dubbo 暴露商品与库存 RPC | [设计方案](product-service/设计方案.md) · [README](product-service/README.md) |
 | `order-service` | **8004** | Java | 下单、订单查询/取消、支付单与支付回调（HmacSHA256 验签）、超时取消与补偿 | [设计文档](order-service/设计文档.md) · [README](order-service/README.md) |
-| `video-service-go` | **9001** | Go | 视频上传（→ MinIO）、异步多码率转码（FFmpeg）、HLS 播放地址、发布/下架、转码重试 | [需求](video-service-go/docs/需求文档.md) · [设计](video-service-go/docs/设计文档.md) · [接口](video-service-go/docs/接口文档.md) |
+| `video-service-go` | **9001** | Go | 视频上传（→ MinIO，支持**分片上传 + 断点续传**）、异步多码率转码（FFmpeg）、HLS 播放地址、发布/下架、转码重试 | [需求](video-service-go/docs/需求文档.md) · [设计](video-service-go/docs/设计文档.md) · [接口](video-service-go/docs/接口文档.md) |
 | `live-service-go` | **9002** | Go | 直播间 CRUD、开播关播、推流密钥、播放地址（HLS/FLV/WebRTC）、在线人数心跳、SRS 回调 | [需求](live-service-go/docs/需求文档.md) · [设计](live-service-go/docs/设计文档.md) · [接口](live-service-go/docs/接口文档.md) |
 | `danmaku-service-go` | **9003** | Go | 弹幕 WebSocket 广播、历史弹幕、敏感词过滤、双层限流、幂等落库、撤回与敏感词管理 | [需求](danmaku-service-go/docs/需求文档.md) · [设计](danmaku-service-go/docs/设计文档.md) · [接口](danmaku-service-go/docs/接口文档.md) |
 
@@ -441,7 +441,12 @@ sequenceDiagram
 | `POST` | `/api/v1/videos` | 创建视频草稿（`DRAFT`） | 需登录 |
 | `PUT` | `/api/v1/videos/{id}` | 修改视频 | 仅创建者 |
 | `DELETE` | `/api/v1/videos/{id}` | 删除视频（软删） | 仅创建者 |
-| `POST` | `/api/v1/videos/{id}/upload` | 上传原片（→ MinIO，转 `TRANSCODING`） | 仅创建者 |
+| `POST` | `/api/v1/videos/{id}/upload` | 上传原片（**小文件一次上传**，→ MinIO，转 `TRANSCODING`） | 仅创建者 |
+| `POST` | `/api/v1/videos/{id}/upload/init` | **大文件分片上传**：初始化/复用上传会话（幂等，返回 `uploadId` + 切片计划） | 仅创建者 |
+| `GET` | `/api/v1/videos/{id}/upload/status` | 查询已上传分片（**断点续传入口**） | 仅创建者 |
+| `PUT` | `/api/v1/videos/{id}/upload/parts/{partNumber}` | 上传单个分片（`application/octet-stream`，可并发、可中断重传） | 仅创建者 |
+| `POST` | `/api/v1/videos/{id}/upload/complete` | 合并分片 → 校验齐备 → 提交转码 | 仅创建者 |
+| `DELETE` | `/api/v1/videos/{id}/upload` | 取消上传，回收已传分片 | 仅创建者 |
 | `POST` | `/api/v1/videos/{id}/publish` | 发布（`READY` → `PUBLISHED`） | 仅创建者 |
 | `POST` | `/api/v1/videos/{id}/offline` | 下架（`ADMIN` 可下架他人） | 需登录 |
 | `GET` | `/api/v1/videos/{id}/transcode` | 查询转码任务状态 | 需登录 |
@@ -579,6 +584,7 @@ curl.exe -i "$BASE_GW/ws/danmaku?roomId=5001&access_token=$TOKEN"
 | 网关路由与鉴权（含 Go 三服务、WebSocket 令牌） | `gateway-service` 下 `mvn test` → `GatewayGoRoutingTests`（60 例，直接读取真实 `application.yml`，配置漂移会导致构建失败） |
 | Java 单元 / 集成测试 | `mvn test`（JUnit 5 + MockMvc + H2） |
 | Go 单元测试 | `go test -race -count=1 ./...`（各服务目录下执行） |
+| video 分片上传 / 断点续传端到端冒烟 | `video-service-go/tools/upload-chunk-smoke.ps1`（49 项断言：切片计划推导、不合法分片、**中断后复用同一 `uploadId` 续传**、分片未齐拒绝合并、合并后转码至 READY、abort 回收） |
 
 ---
 
@@ -618,7 +624,7 @@ media-community-backend/
 | 文档 | 内容 |
 | --- | --- |
 | [`deploy/README.md`](deploy/README.md) | **部署总入口**：目录结构、依赖图、端口表、三种启动方式、故障排查 |
-| [`deploy/db/README.md`](deploy/db/README.md) | 共用库 `auth_service` 全部 17 张表的归属、建表顺序与幂等性 |
+| [`deploy/db/README.md`](deploy/db/README.md) | 共用库 `auth_service` 全部 18 张表的归属、建表顺序与幂等性 |
 | [`deploy/db/go/README.md`](deploy/db/go/README.md) | Go 侧 DDL 基线的使用与约束 |
 | [`deploy/k8s/README.md`](deploy/k8s/README.md) | Kubernetes 部署步骤与设计说明 |
 | [`docs/直播，点播，弹幕设计方案.md`](docs/直播，点播，弹幕设计方案.md) | Go 媒体体系的总体设计方案 |

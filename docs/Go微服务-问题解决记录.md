@@ -852,7 +852,7 @@ $result = $ws.ReceiveAsync(...).GetAwaiter().GetResult()
 | `live-service-go/tools/live-smoke.ps1` | 建房 → 开播 → 幂等 → on_publish → 播放地址 → 心跳 → 关播 → 记录 → 重开 → 删除 | 36/36 |
 | `live-service-go/tools/cross-service-events.ps1` | live 事件 → danmaku 广播 system 帧；关播后发送被拒 80003 | 11/11 |
 | `danmaku-service-go/tools/ws-smoke.ps1` | welcome / 广播 / 房间隔离 / 游客只读 / 限流 / 畸形帧 → 1003 / 顶号 → 4001 | 28/28 |
-| `deploy/db/verify-schema.ps1` | DDL 与 AutoMigrate 结构一致性 | 20/20 |
+| `deploy/db/verify-schema.ps1` | DDL 与 AutoMigrate 结构一致性 | 22/22 |
 
 **教训**
 

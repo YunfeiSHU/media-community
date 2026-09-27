@@ -3,7 +3,7 @@
 ## 这是什么
 
 `media-tables.sql` 是 **Go 媒体微服务群**（video / live / danmaku）的建表 DDL 基线，
-描述 **`auth_service` 库**（与 Java 体系共用的同一个库）中 `media_` 前缀的全部 8 张表。
+描述 **`auth_service` 库**（与 Java 体系共用的同一个库）中 `media_` 前缀的全部 9 张表。
 
 **完整的表清单与「新环境建表顺序」在上级文档 [`../README.md`](../README.md)**，
 这里只讲这份文件本身的使用方式与约束。
