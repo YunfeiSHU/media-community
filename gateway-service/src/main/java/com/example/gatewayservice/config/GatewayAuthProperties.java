@@ -57,6 +57,16 @@ public class GatewayAuthProperties {
         /** 角色所在的 claim 名 */
         private String roleClaim = "role";
 
+        /**
+         * 允许从查询参数（{@code access_token}）取令牌的路径，Ant 风格。
+         *
+         * <p>只用于浏览器 WebSocket：浏览器 {@code new WebSocket(url)} 无法自定义请求头，
+         * 只能把令牌放在 URL 上。命中这些路径时令牌来源改为查询参数，
+         * 但**仍需通过全部 JWT 校验**；转发前会把该参数从 URL 摘掉，避免泄漏进下游日志。
+         * 未列出的路径只能走 {@code Authorization} 头。
+         */
+        private List<String> tokenQueryPaths = new ArrayList<>();
+
         public String getSecret() {
             return secret;
         }
@@ -87,6 +97,14 @@ public class GatewayAuthProperties {
 
         public void setRoleClaim(String roleClaim) {
             this.roleClaim = roleClaim;
+        }
+
+        public List<String> getTokenQueryPaths() {
+            return tokenQueryPaths;
+        }
+
+        public void setTokenQueryPaths(List<String> tokenQueryPaths) {
+            this.tokenQueryPaths = tokenQueryPaths;
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.gatewayservice.filter;
 
 import java.nio.charset.StandardCharsets;
+import java.net.URI;
 import java.util.Date;
 import java.util.Set;
 
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.example.gatewayservice.config.GatewayAuthProperties;
 import com.example.gatewayservice.service.RedisBlacklistService;
@@ -40,6 +42,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     /** 历史非标准头，网关不再注入，仅用于清除客户端伪造值 */
     private static final String LEGACY_UID_HEADER = "uid";
 
+    /**
+     * 查询参数令牌名。仅对 {@code gateway.auth.jwt.token-query-paths} 命中的路径生效，
+     * 用于浏览器 WebSocket 握手（浏览器无法为 {@code new WebSocket(url)} 设置请求头）。
+     */
+    private static final String TOKEN_QUERY_PARAM = "access_token";
+
     private final GatewayAuthProperties gatewayAuthProperties;
     private final RedisBlacklistService redisBlacklistService;
 
@@ -61,6 +69,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         String token = extractBearerToken(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+        boolean tokenFromQuery = false;
+        if (!StringUtils.hasText(token) && isTokenQueryPath(path)) {
+            token = request.getQueryParams().getFirst(TOKEN_QUERY_PARAM);
+            tokenFromQuery = StringUtils.hasText(token);
+        }
         if (!StringUtils.hasText(token)) {
             return unauthorized(exchange, "Missing JWT token");
         }
@@ -94,6 +107,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             }
 
             final String finalUserRole = userRole;
+            final boolean stripTokenFromQuery = tokenFromQuery;
             String jti = claims.getId();
             if (StringUtils.hasText(jti)) {
                 return redisBlacklistService.isBlacklisted(jti)
@@ -101,19 +115,31 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                             if (blacklisted) {
                                 return unauthorized(exchange, "Token has been blacklisted");
                             }
-                            return proceedWithRequest(exchange, chain, request, userId, finalUserRole);
+                            return proceedWithRequest(exchange, chain, request, userId, finalUserRole,
+                                    stripTokenFromQuery);
                         });
             }
 
-            return proceedWithRequest(exchange, chain, request, userId, finalUserRole);
+            return proceedWithRequest(exchange, chain, request, userId, finalUserRole, stripTokenFromQuery);
         } catch (JwtException | IllegalArgumentException ex) {
             return unauthorized(exchange, "Invalid JWT token");
         }
     }
 
     private Mono<Void> proceedWithRequest(ServerWebExchange exchange, GatewayFilterChain chain,
-                                          ServerHttpRequest request, String userId, String userRole) {
+                                          ServerHttpRequest request, String userId, String userRole,
+                                          boolean stripTokenFromQuery) {
+        // 令牌来自 URL 时必须在下游之前摘掉，否则会随访问日志 / 反代日志泄漏。
+        // build(true) 表示查询串已是编码态，避免对 roomId、nickname 里的中文重复编码。
+        URI sanitizedUri = stripTokenFromQuery
+                ? UriComponentsBuilder.fromUri(request.getURI())
+                        .replaceQueryParam(TOKEN_QUERY_PARAM)
+                        .build(true)
+                        .toUri()
+                : null;
+
         ServerHttpRequest mutatedRequest = request.mutate()
+                .uri(sanitizedUri != null ? sanitizedUri : request.getURI())
                 .headers(headers -> {
                     headers.remove(REQUEST_ID_HEADER);
                     String requestId = request.getHeaders().getFirst(REQUEST_ID_HEADER);
@@ -157,6 +183,21 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 }
             }
             if (PATH_MATCHER.match(pattern, path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 判断该路径是否允许从查询参数取令牌（浏览器 WebSocket 握手专用）。
+     *
+     * <p>命中不代表免鉴权：令牌来源只是从 {@code Authorization} 头换成查询参数，
+     * 后续的签名 / 签发方 / 受众 / 过期 / 黑名单校验一个都不会跳过。
+     */
+    private boolean isTokenQueryPath(String path) {
+        for (String pattern : gatewayAuthProperties.getJwt().getTokenQueryPaths()) {
+            if (StringUtils.hasText(pattern) && PATH_MATCHER.match(pattern.trim(), path)) {
                 return true;
             }
         }
