@@ -2,6 +2,13 @@ package com.example.authservice.entity;
 
 import java.time.LocalDateTime;
 
+/**
+ * 账号实体，对应表 {@code account}。
+ *
+ * <p>{@link #username} 在当前链路里始终为 NULL：注册只支持手机号 / 邮箱，没有“账号名”。
+ * 保留字段与 {@code uk_username} 唯一索引，是为了将来支持用户名登录；唯一索引允许多个 NULL，不会冲突。
+ * 对外的用户唯一标识是 {@link #uid}（由 user-service 生成，登录时写入 JWT 的 {@code sub}）。
+ */
 public class Account {
 
     private Long id;

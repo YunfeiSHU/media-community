@@ -35,6 +35,13 @@ public class JwtBlacklistService {
         redisTemplate.opsForValue().set(key(jti), "1", Duration.ofSeconds(ttlSeconds));
     }
 
+    /**
+     * 某个 jti 是否已被拉黑。
+     *
+     * <p>当前 auth-service 内部没有调用方（Access Token 的实际校验在网关侧，
+     * 它读取的是同一个 Redis key 前缀的可达性）；保留此方法是为了让黑名单服务语义完整，
+     * 便于后续在 auth-service 内部转发/校验场景中直接用。
+     */
     public boolean isBlacklisted(String jti) {
         return jti != null && Boolean.TRUE.equals(redisTemplate.hasKey(key(jti)));
     }

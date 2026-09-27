@@ -7,10 +7,11 @@ import org.springframework.http.HttpStatus;
  *
  * <p>跨服务统一规范（auth / user / product / order 一致）：
  * <ul>
+ *     <li>{@code 40000} 通用业务失败（HTTP 400，凭据错误 / 联系方式已注册 / 验证码无效等）</li>
  *     <li>{@code 40001} 参数不合法（HTTP 400）</li>
  *     <li>{@code 40101} 未认证（HTTP 401）</li>
  *     <li>{@code 40301} 无权限（HTTP 403）</li>
- *     <li>{@code 42xxx} 触发限流（HTTP 429）</li>
+ *     <li>{@code 429xx} 触发限流（HTTP 429，当前只有 42901）</li>
  *     <li>{@code 50000} 服务器内部错误（HTTP 500）</li>
  * </ul>
  *

@@ -41,8 +41,14 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                             HttpServletRequest httpRequest) {
-        loginRateLimitService.check(httpRequest.getRemoteAddr());
-        return ApiResponse.success(authService.login(request));
+        // RemoteAddr 在经网关访问时是网关地址，需配合 server.forward-headers-strategy=framework
+        // 解析 X-Forwarded-For（见 application.yml），否则所有客户端会共用一个限流桶
+        String clientIp = httpRequest.getRemoteAddr();
+        loginRateLimitService.checkBeforeLogin(clientIp);
+        LoginResponse response = authService.login(request);
+        // 登录成功后清零计数：限流只统计「失败尝试」，否则正常用户连登几次就会被误限
+        loginRateLimitService.onLoginSuccess(clientIp);
+        return ApiResponse.success(response);
     }
 
     @PostMapping("/token/refresh")
@@ -74,7 +80,9 @@ public class AuthController {
     @PostMapping("/verification/send")
     public ApiResponse<VerificationInfo> sendVerification(@Valid @RequestBody SendVerificationRequest request) {
         String code = verificationService.send(request.purpose(), request.type(), request.target());
-        // For email, code is null (sent via email for security). For phone, code is returned.
+        // 学习模式（auth.verification.expose-code，默认 true）：验证码会随响应体返回，
+        // 因为本项目的 Email/SmsNotificationProvider 只是打日志的桩实现，没有真实邮件/短信通道。
+        // 生产环境必须置为 false：send() 会返回 null，验证码只留在 Redis 与通知通道里。
         VerificationInfo info = new VerificationInfo(request.purpose().name().toLowerCase(),
                 request.type().name().toLowerCase(), request.target(), code);
         return ApiResponse.success(info);

@@ -6,12 +6,15 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,12 @@ import org.springframework.stereotype.Service;
 import com.example.authservice.common.BizException;
 import com.example.authservice.common.ErrorCode;
 
+/**
+ * Refresh Token 会话（Redis Hash：一个会话一个 key，存 refreshTokenHash 等字段）。
+ *
+ * <p>注意：{@code Session} 里的 {@code refreshToken} 是给调用方回传给客户端用的明文，
+ * Redis 里只存它的 SHA-256（{@code refreshTokenHash}），即使 Redis 被读取也无法直接冒用。
+ */
 @Service
 public class SessionService {
 
@@ -65,20 +74,13 @@ public class SessionService {
         return new Session(refreshToken, REFRESH_TOKEN_TTL.getSeconds());
     }
 
-    public void verify(String refreshToken) {
-        String[] parts = refreshToken.split("\\.", 3);
-        if (parts.length != 3) {
-            throw invalidRefreshToken();
-        }
-        String key = sessionKey(parts[0], parts[1]);
-        HashOperations<String, String, String> hash = redisTemplate.opsForHash();
-        String expectedHash = hash.get(key, "refreshTokenHash");
-        if (expectedHash == null || !MessageDigest.isEqual(
-                expectedHash.getBytes(StandardCharsets.UTF_8),
-                sha256(refreshToken).getBytes(StandardCharsets.UTF_8))) {
-            throw invalidRefreshToken();
-        }
-    }
+    /**
+     * 校验 Refresh Token 是否与会话里的哈希一致。
+     *
+     * <p>该方法已被移除：它把“校验 + 轮换”拆成了两步（典型的 TOCTOU），
+     * 并发下同一个 Refresh Token 能被换出两份新会话。现在统一走 {@link #rotate}，
+     * 它在一个 Lua 脚本里完成比对与替换，天然是原子的。
+     */
 
     public Session rotate(String refreshToken) {
         return rotate(refreshToken, UUID.randomUUID().toString());
@@ -112,12 +114,27 @@ public class SessionService {
         return parse(refreshToken)[0];
     }
 
+    /**
+     * 删除某个用户的所有会话（强制下线）。
+     *
+     * <p>用 SCAN 而**不是** KEYS：KEYS 是 O(N) 全库扫描、会阻塞 Redis 主线程，
+     * 用户量上来后会拖慢整个实例上的所有命令。
+     */
     public void deleteByUid(String uid) {
         if (uid == null || uid.isBlank()) {
             return;
         }
-        Set<String> keys = redisTemplate.keys("auth:session:" + uid + ":*");
-        if (keys != null && !keys.isEmpty()) {
+        Set<String> keys = new HashSet<>();
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(sessionKeyPrefix(uid) + "*")
+                .count(200)
+                .build();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(cursor.next());
+            }
+        }
+        if (!keys.isEmpty()) {
             redisTemplate.delete(keys);
         }
     }
@@ -130,8 +147,12 @@ public class SessionService {
         return parts;
     }
 
+    private String sessionKeyPrefix(String uid) {
+        return "auth:session:" + uid + ":";
+    }
+
     private String sessionKey(String uid, String sessionId) {
-        return "auth:session:" + uid + ":" + sessionId;
+        return sessionKeyPrefix(uid) + sessionId;
     }
 
     private String randomSecret() {

@@ -1,5 +1,8 @@
 server:
   port: ${SERVER_PORT:8002}
+  # 经网关访问时 getRemoteAddr() 拿到的是网关地址；开启后 Spring 会按 X-Forwarded-For
+  # 还原真实客户端 IP。登录限流（LoginRateLimitService）按真实 IP 分桶，依赖本项。
+  forward-headers-strategy: framework
 
 dubbo:
   application:
@@ -59,9 +62,16 @@ mybatis:
 
 auth:
   jwt:
-    secret: ${AUTH_JWT_SECRET:change-this-secret-to-a-random-value-at-least-32-bytes}
+    # 必须与 gateway-service 的 gateway.auth.jwt.secret 用同一把密钥，否则 auth 签发的 token
+    # 在网关上验签失败 → 所有带 token 的请求一律 401（历史踩坑：两侧变量名与默认值都不同）。
+    # 同时支持 JWT_SECRET（与网关一致，推荐）与 AUTH_JWT_SECRET（历史名）。
+    secret: ${JWT_SECRET:${AUTH_JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}}
     access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:1800}
     refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:604800}
+  verification:
+    # 学习模式：验证码随 /verification/send 响应返回并写入服务日志（本项目的邮件/短信 Provider 只是桩实现）。
+    # 生产环境必须置为 false。
+    expose-code: ${AUTH_VERIFICATION_EXPOSE_CODE:true}
   login-rate-limit:
     max-attempts: ${AUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:5}
     window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:60}

@@ -2,8 +2,16 @@ package com.example.userservice.rpc;
 
 import java.io.Serializable;
 
+/**
+ * 创建用户档案的 Dubbo 入参（契约所有者是 user-service，本文件是消费者侧副本，包名必须与提供者一致）。
+ *
+ * <p><b>没有 username 字段</b>：本系统的登录凭证只有手机号 / 邮箱，没有“账号名”这个概念。
+ * 用户唯一标识是服务端生成的 {@code uid}（auth 侧拿到回值后写进 account.uid）。
+ */
 public class CreateUserCommand implements Serializable {
-    private String username;
+
+    private static final long serialVersionUID = 1L;
+
     private String nickname;
     private String avatar;
     private String gender;
@@ -12,16 +20,13 @@ public class CreateUserCommand implements Serializable {
     public CreateUserCommand() {
     }
 
-    public CreateUserCommand(String username, String nickname, String avatar, String gender, String bio) {
-        this.username = username;
+    public CreateUserCommand(String nickname, String avatar, String gender, String bio) {
         this.nickname = nickname;
         this.avatar = avatar;
         this.gender = gender;
         this.bio = bio;
     }
 
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
     public String getNickname() { return nickname; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getAvatar() { return avatar; }
