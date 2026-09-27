@@ -1,0 +1,65 @@
+# video-service-go 默认配置
+#
+# 所有值都支持 ${ENV:-default} 占位，由 internal/config 在解析前展开。
+# 因此「不设置任何环境变量」也能直接跑起来。
+#
+# 【数据层与 Java 体系共用】
+#   MySQL：同一个实例、同一个库 auth_service（与 auth/user/product/order 同库）
+#          Go 侧表统一带 media_ 前缀，避免与 Java 的表名冲突
+#   Redis：同一个实例、同一个 db 0（与 gateway/auth 同一实例，Java 用 gateway:/auth: 前缀）
+#          Go 侧 key 统一带 video: / live: / danmaku: 前缀，互不干扰
+
+app:
+  name: video-service
+  version: v1.0.0
+  port: 9001
+  mode: "${APP_ENV:-local}"          # local/dev/debug → 文本日志；其它 → JSON 日志 + release
+  shutdown_timeout: 10s
+
+mysql:
+  # 与 Java 共用：同一个 MySQL 实例、同一个 auth_service 库
+  dsn: "${VIDEO_MYSQL_DSN:-root:***REMOVED***@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
+  max_open: 50
+  max_idle: 10
+  conn_max_lifetime: 30m
+  log_level: warn                     # silent | error | warn | info
+
+redis:
+  # 与 Java 共用：同一个 Redis 实例、同一个 db 0（靠 key 前缀隔离）
+  addr: "${VIDEO_REDIS_ADDR:-127.0.0.1:6379}"
+  password: "${VIDEO_REDIS_PASSWORD:-}"
+  db: 0
+  pool_size: 20
+  dial_timeout: 3s
+
+events:
+  driver: "${VIDEO_EVENTS_DRIVER:-rabbitmq}"    # rabbitmq | local
+  url: "${VIDEO_RABBITMQ_URL:-amqp://admin:admin@127.0.0.1:5672/}"
+  exchange: "${VIDEO_EVENTS_EXCHANGE:-go.media.video}"
+  prefetch: 10
+  retry: 3                            # 消费失败重试次数，超出进死信队列
+  idempotent_ttl: 1h
+
+minio:
+  endpoint: "${VIDEO_MINIO_ENDPOINT:-127.0.0.1:9000}"            # 服务端访问（容器内用 minio:9000）
+  public_endpoint: "${VIDEO_MINIO_PUBLIC_ENDPOINT:-http://127.0.0.1:9000}"  # 返回给前端的地址
+  access_key: "${VIDEO_MINIO_ACCESS_KEY:-minioadmin}"
+  secret_key: "${VIDEO_MINIO_SECRET_KEY:-minioadmin}"
+  bucket: "${VIDEO_MINIO_BUCKET:-media}"
+  use_ssl: false
+  region: ""
+
+transcoder:
+  driver: "${VIDEO_TRANSCODER_DRIVER:-mock}"     # mock | real(ffmpeg)
+  ffmpeg_path: "${VIDEO_FFMPEG_PATH:-ffmpeg}"
+  work_dir: "${VIDEO_WORK_DIR:-./.work}"
+  timeout: 30m
+  concurrency: 2
+
+upload:
+  max_size_mb: 2048
+  allowed_ext: ["mp4", "mov", "mkv", "avi", "flv", "webm"]
+
+view:
+  flush_interval: 30s                 # 播放量 Redis → MySQL 回写周期
+  detail_cache_ttl: 300s              # 视频详情缓存 TTL
