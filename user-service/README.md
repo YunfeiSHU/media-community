@@ -8,7 +8,10 @@
 mvn spring-boot:run
 ```
 
-默认地址：`http://localhost:8080`。默认连接本机 MySQL 的 `user_service` 数据库，并初始化一个 `demo` 用户。可通过 `MYSQL_URL`、`MYSQL_USERNAME`、`MYSQL_PASSWORD` 覆盖连接配置。
+默认地址：`http://localhost:8001`。默认连接本机 MySQL `127.0.0.1:3306` 的 `auth_service` 库
+（5 个 Java 服务共用同一个库，靠表名区分；Java 服务的表名不带 `media_` 前缀），
+启动时执行 `schema.sql` 创建 `user` 表（`CREATE TABLE IF NOT EXISTS`，不会清空已有数据）。
+可通过 `SERVER_PORT`、`MYSQL_URL`、`MYSQL_USERNAME`、`MYSQL_PASSWORD` 覆盖默认配置。
 
 创建数据库：
 

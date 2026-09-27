@@ -1,13 +1,15 @@
 server:
-  port: 8001
+  port: ${SERVER_PORT:8001}
 
 dubbo:
   application:
     name: user-service
     qos-enable: ${DUBBO_QOS_ENABLE:false}
-  protocol: #启动Dubbo协议的RPC服务器，用于PRC服务调用，默认端口为20880
+  protocol:
+    # 作为服务提供者对外暴露的 Dubbo 端口；-1 = 随机分配（本服务不需要固定端口，
+    # 容器也不映射它：调用方是走注册中心发现地址的，不依赖固定端口）
     name: dubbo
-    port: -1 # 自动分配可用端口
+    port: ${DUBBO_PROTOCOL_PORT:-1}
   registry:
     address: ${NACOS_REGISTRY_ADDRESS:nacos://localhost:8848}
     username: ${NACOS_USERNAME:nacos}

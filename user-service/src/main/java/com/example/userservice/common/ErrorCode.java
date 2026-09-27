@@ -26,7 +26,8 @@ public enum ErrorCode {
 
     USER_NOT_FOUND(40401, "用户不存在", HttpStatus.NOT_FOUND),
 
-    USERNAME_CONFLICT(40901, "用户名已存在", HttpStatus.CONFLICT),
+    /** 唯一键冲突：本服务的唯一键只有 uid（随机串），所以不会是“用户名已存在” */
+    USER_CONFLICT(40901, "用户标识冲突", HttpStatus.CONFLICT),
 
     INTERNAL_ERROR(50000, "服务器内部错误", HttpStatus.INTERNAL_SERVER_ERROR);
 

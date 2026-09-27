@@ -1,18 +1,14 @@
 package com.example.userservice.rpc;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.apache.dubbo.config.annotation.DubboService;
 
 import com.example.userservice.entity.User;
-import com.example.userservice.entity.UserRole;
-import com.example.userservice.entity.UserStatus;
 import com.example.userservice.service.UserService;
 
 @DubboService
@@ -23,22 +19,19 @@ public class UserDubboServiceImpl implements UserDubboService {
         this.userService = userService;
     }
 
+    /**
+     * 创建用户档案。
+     *
+     * <p>赋值逻辑与 HTTP 入口统一放在 {@link UserService#createUser}，本方法只做参数校验与协议转换，
+     * 避免两份代码在 role/status 上再次走偏。
+     */
     @Override
     public RpcUser createUser(CreateUserCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("create command is required");
         }
-        User user = new User();
-        user.setUid(UUID.randomUUID().toString().replace("-", ""));
-        user.setNickname(command.getNickname());
-        user.setAvatar(command.getAvatar());
-        user.setGender(command.getGender());
-        user.setBio(command.getBio());
-        user.setRole(UserRole.USER.getCode());
-        user.setStatusEnum(UserStatus.NORMAL);
-        user.setCreatedAt(LocalDateTime.now());
-        user.setUpdatedAt(user.getCreatedAt());
-        userService.insertForRpc(user);
+        User user = userService.createUser(command.getNickname(), command.getAvatar(),
+                command.getGender(), command.getBio());
         return RpcUser.from(user);
     }
 

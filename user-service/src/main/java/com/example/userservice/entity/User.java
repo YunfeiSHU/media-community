@@ -2,6 +2,12 @@ package com.example.userservice.entity;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户实体，对应表 {@code user}。
+ *
+ * <p>字段与表列一一对应；曾经的 {@code getUsername()/setUsername()}（实际读写 uid）与
+ * {@code getUserId()/setUserId()}（内部主键的别名）已删掉，避免“看着像账号名、其实是 uid”的误导。
+ */
 public class User {
     private Long id;
     private String uid;
@@ -18,10 +24,6 @@ public class User {
     public void setId(Long id) { this.id = id; }
     public String getUid() { return uid; }
     public void setUid(String uid) { this.uid = uid; }
-    public Long getUserId() { return id; }
-    public void setUserId(Long userId) { this.id = userId; }
-    public String getUsername() { return uid; }
-    public void setUsername(String username) { this.uid = username; }
     public String getNickname() { return nickname; }
     public void setNickname(String nickname) { this.nickname = nickname; }
     public String getAvatar() { return avatar; }

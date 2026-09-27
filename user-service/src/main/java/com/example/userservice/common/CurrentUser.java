@@ -9,15 +9,16 @@ import jakarta.servlet.http.HttpServletRequest;
  * （即用户 uid）与 {@code role} claim（即角色）分别写入 {@code X-User-Id} / {@code X-User-Role}；白名单路径会先清掉这些头。
  * 因此本服务<b>只信任</b>这两个头，绝不接受请求体 / 查询参数里客户端自报的用户标识或角色。
  *
- * <p>兼容历史非标准头 {@code uid}（早期网关注入），仅作兜底读取。
+ * <p>早期网关曾注入过非标准的 {@code uid} 头，该头<b>已废弃</b>：网关现在只会删除它、不再写入，
+ * 因此本类也不再兼容读取——否则任何客户端都能用一个自造的头冒充任意用户。
+ *
+ * <p>需注意本约定的前提是“请求确实来自网关”：若直连 8001 端口绕过网关，
+ * 伪造 {@code X-User-Id} / {@code X-User-Role} 依旧可以冒充身份，生产环境必须在网络层禁止直连。
  */
 public final class CurrentUser {
 
     /** 网关注入的用户标识头（值 = JWT 的 sub） */
     private static final String USER_ID_HEADER = "X-User-Id";
-
-    /** 历史非标准头，兜底兼容 */
-    private static final String LEGACY_UID_HEADER = "uid";
 
     /** 网关注入的角色头（值 = JWT 的 role claim） */
     private static final String USER_ROLE_HEADER = "X-User-Role";
@@ -35,9 +36,6 @@ public final class CurrentUser {
      */
     public static String uid(HttpServletRequest request) {
         String value = request.getHeader(USER_ID_HEADER);
-        if (value == null || value.isBlank()) {
-            value = request.getHeader(LEGACY_UID_HEADER);
-        }
         if (value == null || value.isBlank()) {
             throw new BizException(ErrorCode.UNAUTHORIZED, "缺少用户身份信息，请通过网关登录后访问");
         }
