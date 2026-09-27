@@ -201,6 +201,31 @@ if ($publishFull -eq $rootFull -or $publishFull.StartsWith($rootFull + '\')) {
 }
 $PublishDir = $publishFull
 
+# ---------------------------------------------------------------- 聚合目录准备
+# 聚合目录是可再生的（内容全部来自 9 个本地仓库 + 远端已有的历史），
+# 所以本地副本不存在时必须先克隆，否则会踩两个坑：
+#   1) 在空目录里 git init → 读不到 AGGREGATE.md 里的锚点 → 所有单元退化成「整体快照」，
+#      原有的逐条提交历史被一条大快照覆盖；
+#   2) push 时本地历史与远端无关（unrelated histories）→ 直接被拒，只能强推。
+if (-not $Fresh) {
+    if (-not (Test-Path (Join-Path $PublishDir '.git'))) {
+        if ($DryRun) {
+            Write-Host '- 聚合目录还没有 .git，DryRun 不做克隆，因此本轮读不到锚点（正式运行会先克隆）'
+        }
+        else {
+            $cloneUrl = "https://github.com/$Owner/$RepoName.git"
+            Write-Host "- 聚合目录还没有 .git，先从远端克隆: $cloneUrl" -ForegroundColor Yellow
+            & git clone $cloneUrl $PublishDir
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host '  克隆完成：可继续按锚点增量重放' -ForegroundColor Green
+            }
+            else {
+                Write-Host '  克隆失败（仓库不存在或网络不可达）→ 退化为「整体快照 + 新建仓库」，推送可能需要 --force' -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
 if ($Fresh -and -not $DryRun -and (Test-Path (Join-Path $PublishDir '.git'))) {
     Write-Host '-Fresh：清空聚合仓库的 git 历史' -ForegroundColor Yellow
     Remove-Item (Join-Path $PublishDir '.git') -Recurse -Force
