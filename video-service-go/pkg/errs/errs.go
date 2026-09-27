@@ -31,6 +31,7 @@ var (
 	CodeTooManyRequests  = ErrorCode{Code: 42901, Message: "请求过于频繁", HTTPStatus: http.StatusTooManyRequests}
 	CodeInternal         = ErrorCode{Code: 50000, Message: "内部错误", HTTPStatus: http.StatusInternalServerError}
 	CodeDependencyDown   = ErrorCode{Code: 50001, Message: "下游依赖不可用", HTTPStatus: http.StatusServiceUnavailable}
+	CodeUploadNotFound   = ErrorCode{Code: 40404, Message: "上传会话不存在或已失效", HTTPStatus: http.StatusNotFound}
 )
 
 // video 域专用错误码。
@@ -39,6 +40,8 @@ var (
 	CodeFileTooLarge        = ErrorCode{Code: 60002, Message: "文件超出大小限制", HTTPStatus: http.StatusRequestEntityTooLarge}
 	CodeVideoStatusConflict = ErrorCode{Code: 60003, Message: "视频状态不允许该操作", HTTPStatus: http.StatusConflict}
 	CodeTranscodeSubmitFail = ErrorCode{Code: 60004, Message: "转码任务提交失败", HTTPStatus: http.StatusServiceUnavailable}
+	CodeUploadPartInvalid   = ErrorCode{Code: 60005, Message: "上传分片不合法", HTTPStatus: http.StatusBadRequest}
+	CodeUploadIncomplete    = ErrorCode{Code: 60006, Message: "分片尚未全部上传", HTTPStatus: http.StatusConflict}
 )
 
 // BizError 是可对外暴露的业务错误。

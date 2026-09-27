@@ -1,11 +1,11 @@
 # video-service-go · 点播服务
 
-视频上传 → 异步转码（FFmpeg 多码率 HLS）→ 发布 → 播放。
+视频上传（小文件一次上传 / 大文件**分片上传 + 断点续传**）→ 异步转码（FFmpeg 多码率 HLS）→ 发布 → 播放。
 
 | 项 | 值 |
 | --- | --- |
 | 端口 | 9001 |
-| 数据库 | **与 Java 共用** `auth_service` 库（表：`media_video` / `media_video_category` / `media_video_tag` / `media_transcode_task`） |
+| 数据库 | **与 Java 共用** `auth_service` 库（表：`media_video` / `media_video_category` / `media_video_tag` / `media_transcode_task` / `media_upload_session`） |
 | Redis | **与 Java 共用** `127.0.0.1:6379` db 0（key 前缀 `video:`） |
 | 依赖 | MySQL（与 Java 共用）· Redis（与 Java 共用）· RabbitMQ · MinIO · FFmpeg（可选） |
 | 技术栈 | Go · Gin · GORM · go-redis · amqp091-go · minio-go |
@@ -56,7 +56,8 @@ curl.exe http://localhost:9001/readyz
 
 ```text
 POST /videos                    创建草稿 (DRAFT)
-POST /videos/:id/upload         MinIO 上传原片 → 状态 TRANSCODING → 投递 video.uploaded
+POST /videos/:id/upload         MinIO 一次性上传原片（小文件）→ TRANSCODING → 投递 video.uploaded
+POST /videos/:id/upload/init    大文件分片上传：init → parts/:n → complete（可断点续传）
    ↓ (Transcode Worker 消费)
 GET  /videos/:id/transcode      查询进度（PENDING/RUNNING/SUCCESS/FAILED）
    ↓ 转码成功，状态 READY
@@ -64,6 +65,20 @@ POST /videos/:id/publish        发布 (PUBLISHED)
 GET  /videos/:id/play           取 HLS 播放地址 + 多码率 sources
 POST /videos/:id/offline        下架 (OFFLINE)
 ```
+
+### 分片上传与断点续传
+
+大文件走 5 个接口：`init` → `PUT parts/:n`（可并发、可中断）→ `complete`，
+另有 `GET status` 查进度与 `DELETE` 取消。
+
+- **切片大小以 `init` 返回的 `partSize` 为准**，非末片必须正好等于它
+  （另有 S3 协议下限 5MiB、上限 10000 片）；
+- **断点续传的权威进度来自 MinIO `ListParts`**：服务端不另存进度副本，
+  `media_upload_session` 表只保存 `uploadId ↔ videoId` 映射与切片计划；
+- 同参数重复 `init` 会**复用同一 `uploadId`**，已上传的分片不会失效；
+- 与一次性上传在「原片已就位」后走同一条转码编排路径（建任务 → 改状态 → 发事件）。
+
+端到端验收：`pwsh -File tools/upload-chunk-smoke.ps1`（49 项断言）。
 
 ## 目录结构
 
@@ -78,7 +93,7 @@ video-service-go/
 │       ├── events/              事件总线（rabbitmq / local）
 │       ├── cache/               详情缓存、分类缓存、播放量缓冲
 │       ├── media/               转码器（mock / ffmpeg）+ 码率档位
-│       ├── storage/             MinIO 封装
+│       ├── storage/             MinIO 封装（含 multipart 分片上传）
 │       └── router/              路由注册
 ├── pkg/                         平台基础设施
 │   ├── errs/  response/         错误码 + 统一响应

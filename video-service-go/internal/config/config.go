@@ -87,10 +87,16 @@ type Transcoder struct {
 	Concurrency int           `yaml:"concurrency"`
 }
 
-// Upload 是上传限制配置。
+// Upload 是上传限制与分片参数配置。
 type Upload struct {
 	MaxSizeMB  int      `yaml:"max_size_mb"`
 	AllowedExt []string `yaml:"allowed_ext"`
+	// PartSizeMB 是服务端建议的分片大小；客户端可以不传 partSize，由服务端按文件大小推导。
+	PartSizeMB int `yaml:"part_size_mb"`
+	// MinPartSizeMB 是 S3 协议下限（非末片不得小于 5MiB），配置只是显式化，不可改小。
+	MinPartSizeMB int `yaml:"min_part_size_mb"`
+	// MaxParts 是单次上传允许的最大分片数（S3 协议上限 10000）。
+	MaxParts int `yaml:"max_parts"`
 }
 
 // View 是播放量统计配置。
@@ -215,6 +221,16 @@ func (c *Config) applyDefaults() {
 	}
 	if len(c.Upload.AllowedExt) == 0 {
 		c.Upload.AllowedExt = []string{"mp4", "mov", "mkv", "avi", "flv", "webm"}
+	}
+	if c.Upload.PartSizeMB <= 0 {
+		c.Upload.PartSizeMB = 8
+	}
+	if c.Upload.MinPartSizeMB <= 0 {
+		c.Upload.MinPartSizeMB = 5
+	}
+	// S3 协议硬上限：分片数不能超过 10000，配置写大了也没意义。
+	if c.Upload.MaxParts <= 0 || c.Upload.MaxParts > 10000 {
+		c.Upload.MaxParts = 10000
 	}
 	if c.View.FlushInterval <= 0 {
 		c.View.FlushInterval = 30 * time.Second

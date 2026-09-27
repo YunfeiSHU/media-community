@@ -59,6 +59,9 @@ transcoder:
 upload:
   max_size_mb: 2048
   allowed_ext: ["mp4", "mov", "mkv", "avi", "flv", "webm"]
+  part_size_mb: 8                     # 服务端建议的分片大小；客户端不传 partSize 时按文件大小推导
+  min_part_size_mb: 5                 # S3 协议下限：非末片不得小于 5MiB（不要改小，MinIO 会拒绝）
+  max_parts: 10000                    # S3 协议分片数上限
 
 view:
   flush_interval: 30s                 # 播放量 Redis → MySQL 回写周期

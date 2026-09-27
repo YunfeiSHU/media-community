@@ -16,18 +16,19 @@ import (
 //
 // 注意：本服务与 Java 体系共用 auth_service 库，表名统一加 media_ 前缀
 // （Java 侧的表为无前缀的 account/user/product/sku/inventory/order/payment_record）。
-// AutoMigrate 只操作已注册的这 4 张表，不会碰 Java 的表。
+// AutoMigrate 只操作已注册的这 5 张表，不会碰 Java 的表。
 func AutoMigrate(db *gorm.DB, log *slog.Logger) error {
 	tables := []any{
 		&model.Video{},
 		&model.Category{},
 		&model.VideoTag{},
 		&model.TranscodeTask{},
+		&model.UploadSession{},
 	}
 	if err := db.AutoMigrate(tables...); err != nil {
 		return fmt.Errorf("自动建表失败: %w", err)
 	}
-	log.Info("db_migrated", "tables", []string{"media_video", "media_video_category", "media_video_tag", "media_transcode_task"})
+	log.Info("db_migrated", "tables", []string{"media_video", "media_video_category", "media_video_tag", "media_transcode_task", "media_upload_session"})
 	return nil
 }
 

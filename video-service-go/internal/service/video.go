@@ -38,14 +38,15 @@ const (
 
 // VideoService 是点播域的核心业务实现。
 type VideoService struct {
-	cfg    *config.Config
-	videos repository.VideoRepository
-	cats   repository.CategoryRepository
-	tasks  repository.TranscodeRepository
-	store  *storage.Storage
-	bus    events.Bus
-	cache  *cache.VideoCache
-	log    *slog.Logger
+	cfg     *config.Config
+	videos  repository.VideoRepository
+	cats    repository.CategoryRepository
+	tasks   repository.TranscodeRepository
+	uploads repository.UploadSessionRepository
+	store   *storage.Storage
+	bus     events.Bus
+	cache   *cache.VideoCache
+	log     *slog.Logger
 }
 
 // NewVideoService 构造视频服务。
@@ -54,20 +55,22 @@ func NewVideoService(
 	videos repository.VideoRepository,
 	cats repository.CategoryRepository,
 	tasks repository.TranscodeRepository,
+	uploads repository.UploadSessionRepository,
 	store *storage.Storage,
 	bus events.Bus,
 	videoCache *cache.VideoCache,
 	log *slog.Logger,
 ) *VideoService {
 	return &VideoService{
-		cfg:    cfg,
-		videos: videos,
-		cats:   cats,
-		tasks:  tasks,
-		store:  store,
-		bus:    bus,
-		cache:  videoCache,
-		log:    log,
+		cfg:     cfg,
+		videos:  videos,
+		cats:    cats,
+		tasks:   tasks,
+		uploads: uploads,
+		store:   store,
+		bus:     bus,
+		cache:   videoCache,
+		log:     log,
 	}
 }
 
@@ -191,7 +194,7 @@ func (s *VideoService) DeleteVideo(ctx context.Context, u identity.CurrentUser, 
 	return &dto.DeleteVideoResult{VideoID: id, Deleted: true}, nil
 }
 
-// Upload 上传原片并投递转码事件。
+// Upload 一次性上传原片并投递转码事件（小文件走这条，大文件请用分片上传）。
 func (s *VideoService) Upload(ctx context.Context, u identity.CurrentUser, id uint64, fileHeader *multipart.FileHeader) (*dto.UploadResult, error) {
 	video, err := s.mustGetOwned(ctx, u, id)
 	if err != nil {
@@ -210,13 +213,8 @@ func (s *VideoService) Upload(ctx context.Context, u identity.CurrentUser, id ui
 
 	// 幂等：已在上传/转码中，直接返回当前任务
 	if video.Status == model.VideoStatusTranscoding {
-		if task, err := s.tasks.LatestByVideoID(ctx, id); err == nil {
-			return &dto.UploadResult{
-				VideoID:   id,
-				Status:    string(video.Status),
-				TaskID:    task.ID,
-				SizeBytes: video.SizeBytes,
-			}, nil
+		if result, ok := s.reuseTranscodingTask(ctx, video); ok {
+			return result, nil
 		}
 	}
 	if !video.Status.CanUpload() {
@@ -235,59 +233,7 @@ func (s *VideoService) Upload(ctx context.Context, u identity.CurrentUser, id ui
 		return nil, errs.CodeDependencyDown.New("上传到对象存储失败")
 	}
 
-	// 先建任务、再改视频状态、最后发消息：
-	// 最坏情况是消息投递失败导致视频卡在 TRANSCODING，可用 retry 接口兜底；
-	// 反过来（先发消息）则消费者可能读到旧状态而误判。
-	task := &model.TranscodeTask{
-		VideoID:  id,
-		Status:   model.TranscodeStatusPending,
-		Profiles: media.JoinProfileNames(),
-	}
-	if err := s.tasks.Create(ctx, task); err != nil {
-		return nil, err
-	}
-
-	if err := s.videos.UpdateFields(ctx, id, map[string]any{
-		"status":        model.VideoStatusTranscoding,
-		"source_object": objectKey,
-		"size_bytes":    fileHeader.Size,
-	}); err != nil {
-		return nil, err
-	}
-	s.cache.DelDetail(ctx, id)
-
-	event, err := events.New(events.RoutingVideoUploaded, trace.From(ctx), dto.VideoUploadedPayload{
-		VideoID:      id,
-		OwnerID:      u.UID,
-		SourceObject: objectKey,
-		Ext:          ext,
-		SizeBytes:    fileHeader.Size,
-		TaskID:       task.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := s.bus.Publish(ctx, events.RoutingVideoUploaded, event); err != nil {
-		s.log.Error("publish_video_uploaded_failed", "videoId", id, "eventId", event.EventID, "error", err)
-		return nil, errs.CodeTranscodeSubmitFail.New("投递转码事件失败，可使用转码重试接口")
-	}
-
-	// 回写 eventId，供消费侧幂等与排障
-	if err := s.tasks.UpdateFields(ctx, task.ID, map[string]any{"event_id": event.EventID}); err != nil {
-		s.log.Warn("save_event_id_failed", "taskId", task.ID, "error", err)
-	}
-
-	s.log.Info("video_uploaded",
-		"videoId", id, "taskId", task.ID, "object", objectKey,
-		"sizeBytes", fileHeader.Size, "eventId", event.EventID)
-
-	return &dto.UploadResult{
-		VideoID:   id,
-		Status:    string(model.VideoStatusTranscoding),
-		TaskID:    task.ID,
-		SizeBytes: fileHeader.Size,
-	}, nil
+	return s.submitTranscode(ctx, video, objectKey, ext, fileHeader.Size)
 }
 
 // Publish 发布视频（仅创建者）。

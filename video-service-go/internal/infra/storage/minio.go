@@ -16,8 +16,13 @@ import (
 )
 
 // Storage 是对象存储客户端封装。
+//
+// client 与 core 指向同一个底层客户端：minio-go 把 S3 的低阶原语
+// （分片上传等）定义在 `Core` 类型上，而不是 `Client` 上，
+// 因此需要 `minio.Core{Client: client}` 再包一层才能调到那些方法。
 type Storage struct {
 	client     *minio.Client
+	core       minio.Core
 	bucket     string
 	publicBase string
 }
@@ -34,6 +39,7 @@ func New(cfg config.MinIO) (*Storage, error) {
 	}
 	return &Storage{
 		client:     client,
+		core:       minio.Core{Client: client},
 		bucket:     cfg.Bucket,
 		publicBase: strings.TrimRight(cfg.PublicEndpoint, "/"),
 	}, nil

@@ -103,9 +103,10 @@ func run() error {
 	videoRepo := repository.NewVideoRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 	transcodeRepo := repository.NewTranscodeRepository(db)
+	uploadRepo := repository.NewUploadSessionRepository(db)
 
 	videoService := service.NewVideoService(
-		cfg, videoRepo, categoryRepo, transcodeRepo, objectStore, bus, videoCache, log)
+		cfg, videoRepo, categoryRepo, transcodeRepo, uploadRepo, objectStore, bus, videoCache, log)
 	categoryService := service.NewCategoryService(categoryRepo, videoCache, log)
 	transcodeWorker := service.NewTranscodeWorker(
 		cfg, transcodeRepo, bus, objectStore, transcoder, videoCache, log)
@@ -116,6 +117,7 @@ func run() error {
 
 	engine := router.New(cfg, log, router.Handlers{
 		Video:    handler.NewVideoHandler(videoService),
+		Upload:   handler.NewUploadHandler(videoService),
 		Category: handler.NewCategoryHandler(categoryService),
 		Health: handler.NewHealthHandler(cfg.App.Name, cfg.App.Version, 3*time.Second, []handler.HealthCheck{
 			{Name: "mysql", Fn: func(ctx context.Context) (string, error) {

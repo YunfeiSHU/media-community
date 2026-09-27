@@ -13,6 +13,7 @@ import (
 // Handlers 汇总全部 HTTP handler，避免路由构造参数过长。
 type Handlers struct {
 	Video    *handler.VideoHandler
+	Upload   *handler.UploadHandler
 	Category *handler.CategoryHandler
 	Health   *handler.HealthHandler
 }
@@ -57,7 +58,15 @@ func New(cfg *config.Config, log *slog.Logger, h Handlers) *gin.Engine {
 	authed.POST("", h.Video.Create)
 	authed.PUT("/:id", h.Video.Update)
 	authed.DELETE("/:id", h.Video.Delete)
+
+	// 上传：一次性（小文件）与分片（大文件，支持断点续传）两条入口
 	authed.POST("/:id/upload", h.Video.Upload)
+	authed.POST("/:id/upload/init", h.Upload.Init)
+	authed.GET("/:id/upload/status", h.Upload.Status)
+	authed.PUT("/:id/upload/parts/:partNumber", h.Upload.Part)
+	authed.POST("/:id/upload/complete", h.Upload.Complete)
+	authed.DELETE("/:id/upload", h.Upload.Abort)
+
 	authed.POST("/:id/publish", h.Video.Publish)
 	authed.POST("/:id/offline", h.Video.Offline)
 	authed.GET("/:id/transcode", h.Video.TranscodeStatus)

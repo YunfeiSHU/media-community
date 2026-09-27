@@ -76,6 +76,58 @@ type PublishResult struct {
 	PublishedAt *time.Time `json:"publishedAt,omitempty"`
 }
 
+// ---------------------------------------------------------------- 分片上传
+
+// InitUploadRequest 是初始化分片上传的请求体。
+type InitUploadRequest struct {
+	// Filename 用于推断扩展名（决定 Content-Type 与 HLS 转码器的输入格式）。
+	Filename string `json:"filename"`
+	// FileSize 是原片总字节数，用于推导分片大小与总分片数。
+	FileSize int64 `json:"fileSize"`
+	// PartSize 可选：客户端想自己控制分片大小时传（单位字节，不得小于 5MiB）。
+	// 为 0 时由服务端按文件大小推导。
+	PartSize int64 `json:"partSize"`
+}
+
+// UploadPartDTO 描述一个已在对象存储中落地的分片。
+type UploadPartDTO struct {
+	PartNumber int    `json:"partNumber"`
+	Size       int64  `json:"size"`
+	ETag       string `json:"etag"`
+}
+
+// UploadSessionResult 是「初始化 / 查询进度 / 上传分片」三类接口的统一返回。
+//
+// 统一成同一个结构是有意为之：客户端每次调用拿到的都是**完整的上传进度快照**，
+// 不需要为不同阶段写不同的解析逻辑；断点续传也只需拿这份快照做差集，
+// 「已传的跳过、没传的继续传」。
+type UploadSessionResult struct {
+	VideoID       uint64          `json:"videoId"`
+	UploadID      string          `json:"uploadId"`
+	ObjectKey     string          `json:"objectKey"`
+	Ext           string          `json:"ext"`
+	FileSize      int64           `json:"fileSize"`
+	PartSize      int64           `json:"partSize"`
+	TotalParts    int             `json:"totalParts"`
+	UploadedParts []UploadPartDTO `json:"uploadedParts"`
+	UploadedBytes int64           `json:"uploadedBytes"`
+	UploadedCount int             `json:"uploadedCount"`
+	Completed     bool            `json:"completed"`
+}
+
+// UploadPartResult 是单次分片上传的返回：完整快照 + 本次分片。
+type UploadPartResult struct {
+	UploadSessionResult
+	// Part 是本次刚上传的那一片（方便客户端确认 ETag）。
+	Part UploadPartDTO `json:"part"`
+}
+
+// AbortUploadResult 是取消分片上传的返回。
+type AbortUploadResult struct {
+	VideoID uint64 `json:"videoId"`
+	Aborted bool   `json:"aborted"`
+}
+
 // VideoBrief 是列表项。
 type VideoBrief struct {
 	ID           uint64     `json:"id"`
