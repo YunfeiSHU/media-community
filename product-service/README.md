@@ -85,7 +85,7 @@ Dubbo 侧的 `ProductRpcService` / `StockRpcService` 是交易链路入口，没
 
 > 当前用户（uid）**只从网关注入的 `X-User-Id` 头取**（值 = JWT 的 `sub`，见
 > `com.example.product.common.CurrentUser`），不解析 JWT、也不接受请求体里的 `uid`。
-> 直连 8081 调试写接口时需自带 `-H "X-User-Id: u-1001"`；
+> 直连 8003 调试写接口时需自带 `-H "X-User-Id: u-1001"`；
 > 用**非创建者**的 uid 调写接口会得到 `403 / 40301`。
 >
 > 角色（`ADMIN` / `user`）同理：**唯一来源是网关注入的 `X-User-Role`**（值 = JWT 的 `role` claim），
@@ -96,25 +96,25 @@ Dubbo 侧的 `ProductRpcService` / `StockRpcService` 是交易链路入口，没
 
 ```bash
 # 创建商品（创建者 = 网关注入的 X-User-Id，请求体里没有 uid）
-curl -X POST http://localhost:8081/api/v1/products -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{
+curl -X POST http://localhost:8003/api/v1/products -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{
   "name": "iPhone 17", "description": "新品",
   "coverUrl": "https://cdn.example.com/1.png", "productType": 1 }'
 
 # 创建 SKU（初始库存 10，需为商品创建者）
-curl -X POST http://localhost:8081/api/v1/products/{productId}/skus -H "X-User-Id: u-1001" -H "Content-Type: application/json" \
+curl -X POST http://localhost:8003/api/v1/products/{productId}/skus -H "X-User-Id: u-1001" -H "Content-Type: application/json" \
   -d '{"name": "256G 黑色", "price": 699900, "initialStock": 10}'
 
 # 上架 / 下架（需为商品创建者）
-curl -X POST http://localhost:8081/api/v1/products/{productId}/on-shelf -H "X-User-Id: u-1001"
-curl -X POST http://localhost:8081/api/v1/products/{productId}/off-shelf -H "X-User-Id: u-1001"
+curl -X POST http://localhost:8003/api/v1/products/{productId}/on-shelf -H "X-User-Id: u-1001"
+curl -X POST http://localhost:8003/api/v1/products/{productId}/off-shelf -H "X-User-Id: u-1001"
 
 # 价格
-curl -X PUT http://localhost:8081/api/v1/skus/{skuId}/price -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"price": 699900}'
+curl -X PUT http://localhost:8003/api/v1/skus/{skuId}/price -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"price": 699900}'
 
 # 库存：扣减 / 释放 / 增加（HTTP 镜像接口，需为商品创建者）
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/reserve -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/release -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
-curl -X POST http://localhost:8081/api/v1/skus/{skuId}/stock/increase -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 100}'
+curl -X POST http://localhost:8003/api/v1/skus/{skuId}/stock/reserve -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
+curl -X POST http://localhost:8003/api/v1/skus/{skuId}/stock/release -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 2}'
+curl -X POST http://localhost:8003/api/v1/skus/{skuId}/stock/increase -H "X-User-Id: u-1001" -H "Content-Type: application/json" -d '{"quantity": 100}'
 ```
 
 ## 4. Dubbo 接口
@@ -178,7 +178,7 @@ private StockRpcService stockRpcService;
 # 1. 初始化数据库（MySQL 8）
 mysql -uroot -p < src/main/resources/db/schema.sql
 # 2. 按需修改 application.yml 中的数据源账号密码
-# 3. 启动（HTTP 8081，Dubbo 20880）
+# 3. 启动（HTTP 8003，Dubbo 20880）
 mvn spring-boot:run
 ```
 
@@ -214,7 +214,7 @@ mvn test
 日志格式：
 
 ```text
-2026-09-22 16:00:45.441 [http-nio-8081-exec-1] INFO  c.e.p.service.impl.ProductServiceImpl requestId=659af9be-... - 创建商品成功: productId=P2QP..., uid=u-1001, ...
+2026-09-22 16:00:45.441 [http-nio-8003-exec-1] INFO  c.e.p.service.impl.ProductServiceImpl requestId=659af9be-... - 创建商品成功: productId=P2QP..., uid=u-1001, ...
 ```
 
 **链路 ID**
@@ -266,4 +266,4 @@ gateway:
 >
 > 经网关访问时代码里的 `X-User-Id` / `X-User-Role` 由网关注入（网关仅注入这两个头，
 > 不再下发非标准头 `uid`；uid 固定取 JWT 标准 claim `sub`），服务本身不做 JWT 校验——
-> 直连 8081 会绕过鉴权，生产环境应保证该端口不对外暴露。
+> 直连 8003 会绕过鉴权，生产环境应保证该端口不对外暴露。

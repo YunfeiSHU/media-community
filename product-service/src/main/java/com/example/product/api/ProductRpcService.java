@@ -28,10 +28,14 @@ public interface ProductRpcService {
     SkuDTO getSku(String skuId);
 
     /**
-     * 查询商品下的全部可用 SKU。
+     * 查询商品下的全部 SKU。
+     *
+     * <p>注意语义是“未删除的 SKU”，<b>包含状态为禁用的 SKU</b>（SQL 条件是 {@code status <> DELETED}）；
+     * 下单链路会自行校验 {@code status == ENABLED} 与库存，所以这里不做过濾。
+     * 调用方不要把它当作“可售 SKU 列表”使用。
      *
      * @param productId 商品业务编号
-     * @return SKU列表，商品不存在时返回空集合
+     * @return SKU 列表；商品不存在或已删除时返回空集合（不抛异常）
      */
     List<SkuDTO> getSkus(String productId);
 }

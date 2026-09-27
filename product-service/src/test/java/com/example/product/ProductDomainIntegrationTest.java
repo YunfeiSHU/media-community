@@ -119,7 +119,7 @@ class ProductDomainIntegrationTest {
         assertThat(sku.skuId()).startsWith("S");
         assertThat(sku.availableStock()).isEqualTo(20);
         assertThat(sku.lockedStock()).isZero();
-        assertThat(sku.productId()).isNotNull();
+        assertThat(sku.productDbId()).isNotNull();
 
         assertThat(skuService.getSku(sku.skuId()).name()).isEqualTo("红色-M");
         assertThat(skuService.getSku(String.valueOf(sku.id())).skuId()).isEqualTo(sku.skuId());

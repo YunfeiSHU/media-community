@@ -21,6 +21,9 @@ public enum ErrorCode {
     STOCK_NOT_ENOUGH(40903, "可用库存不足", HttpStatus.CONFLICT),
     STOCK_LOCK_NOT_ENOUGH(40904, "锁定库存不足", HttpStatus.CONFLICT),
 
+    /** 唯一键冲突（业务编号重复）；由 {@code GlobalExceptionHandler} 对 DuplicateKeyException 使用 */
+    DUPLICATE_REQUEST(40909, "数据已存在，请勿重复提交", HttpStatus.CONFLICT),
+
     INTERNAL_ERROR(50000, "服务器内部错误", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final int code;

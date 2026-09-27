@@ -7,18 +7,19 @@ import jakarta.servlet.http.HttpServletRequest;
  *
  * <p>鉴权统一在 gateway-service 完成：JWT 校验通过后，网关把 JWT 标准 claim {@code sub}
  * （即用户 uid）与 {@code role} claim（即角色）分别写入 {@code X-User-Id} / {@code X-User-Role}（白名单路径会先清掉这些头）。
- * 本服务只信任这两个头，<b>不接受</b>请求体 / 查询参数里客户端自报的用户标识与角色，
+ * 本服务<b>只信任</b>这两个头，<b>不接受</b>请求体 / 查询参数里客户端自报的用户标识与角色，
  * 与 order-service、user-service 的 {@code CurrentUser} 保持同一约定。
  *
- * <p>兼容历史非标准头 {@code uid}（早期网关注入），仅作兜底读取。
+ * <p>早期网关曾注入过非标准的 {@code uid} 头，该头<b>已废弃</b>：网关现在只会删除它、不再写入，
+ * 因此本类也不再兼容读取——否则任何客户端都能用一个自造的头冒充任意用户。
+ *
+ * <p>需注意本约定的前提是“请求确实来自网关”：若直连 8003 端口绕过网关，
+ * 伪造 {@code X-User-Id} / {@code X-User-Role} 依旧可以冒充身份，生产环境必须在网络层禁止直连。
  */
 public final class CurrentUser {
 
     /** 网关注入的用户标识头（值 = JWT 的 sub） */
     private static final String USER_ID_HEADER = "X-User-Id";
-
-    /** 历史非标准头，兜底兼容 */
-    private static final String LEGACY_UID_HEADER = "uid";
 
     /** 网关注入的角色头（值 = JWT 的 role claim） */
     private static final String USER_ROLE_HEADER = "X-User-Role";
@@ -38,11 +39,7 @@ public final class CurrentUser {
      * @throws BizException 缺少身份头（40101）或 uid 超长（40001）
      */
     public static String uid(HttpServletRequest request) {
-        String value = request.getHeader(USER_ID_HEADER);
-        if (value == null || value.isBlank()) {
-            value = request.getHeader(LEGACY_UID_HEADER);
-        }
-        return requireUid(value);
+        return requireUid(request.getHeader(USER_ID_HEADER));
     }
 
     /**

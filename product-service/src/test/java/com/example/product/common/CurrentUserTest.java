@@ -9,21 +9,25 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 /**
  * 当前用户上下文的行为约定：身份与角色都只能来自网关注入的请求头，
- * 请求参数 / 其它头 / 历史头都不是可信来源。
+ * 请求参数 / 其它头 / 已废弃的历史头都不是可信来源。
  */
 class CurrentUserTest {
 
     @Test
-    @DisplayName("uid 只取 X-User-Id，历史头 uid 仅作兜底")
+    @DisplayName("uid 只取 X-User-Id，已废弃的历史头 uid 不再被信任")
     void uidComesFromGatewayHeader() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-User-Id", "u-1001");
         request.addHeader("uid", "legacy-uid");
         assertThat(CurrentUser.uid(request)).isEqualTo("u-1001");
 
+        // 只带历史头 → 40101（网关只会删它、不会写它）
         MockHttpServletRequest legacyOnly = new MockHttpServletRequest();
         legacyOnly.addHeader("uid", "legacy-uid");
-        assertThat(CurrentUser.uid(legacyOnly)).isEqualTo("legacy-uid");
+        assertThatThrownBy(() -> CurrentUser.uid(legacyOnly))
+                .isInstanceOf(BizException.class)
+                .extracting(exception -> ((BizException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.UNAUTHORIZED);
     }
 
     @Test
