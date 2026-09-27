@@ -286,7 +286,10 @@ Desktop.ini
         if ((git remote) -contains 'origin') { git remote set-url origin $remoteUrl }
         else { git remote add origin $remoteUrl }
 
-        git add -A
+        # 工作区文件由 robocopy 从根仓库复制而来，在 core.autocrlf=true 下是 CRLF，而本仓库
+        # 声明了 eol=lf，于是 git 会为每个这类文件打一行 "CRLF will be replaced by LF" 提示。
+        # 索引里存的仍然是 LF，结果正确，但几百行提示会淹没真正的输出，所以在这里过滤掉。
+        git add -A 2>&1 | Where-Object { $_ -notmatch 'will be replaced by' } | ForEach-Object { Write-Host "  $_" }
         if (git status --porcelain) {
             if (-not $Message) { $Message = "sync: 聚合快照 $now" }
             $body = New-Object System.Collections.Generic.List[string]
