@@ -65,7 +65,7 @@ cmd /c "mysql ... auth_service < order-service\src\main\resources\db\schema.sql"
 1. **`--default-character-set=utf8mb4` 不能省。** Windows 上 mysql 客户端默认按本地代码页
    解码文件，DDL 里的 UTF-8 中文注释会被解坏、吞掉后面的引号，报出看起来毫无关系的
    `ERROR 1064 ... near 'DRAFT'`。完整复现过程见
-   [`../../Go微服务-问题解决记录.md`](../../Go微服务-问题解决记录.md) §6.2。
+   [`../../docs/Go微服务-问题解决记录.md`](../../docs/Go微服务-问题解决记录.md) §6.2。
 
 2. **喂文件用 `cmd /c "... < 文件"`，不要用 PowerShell 管道。** PS 管道会给 mysql 重新编码。
 
@@ -112,7 +112,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/db/verify-schema.ps1
 而 `CREATE TABLE IF NOT EXISTS` 对着已存在的表执行是**空操作** ——
 如果在原库里跑，无论 DDL 写得多离谱，「执行是否成功」永远为真，那样的校验毫无意义。
 同理，改完 Go 的 model 后，不要凭 model 手写 DDL（历史上就是这么错的，详见
-[`../../Go微服务-问题解决记录.md`](../../Go微服务-问题解决记录.md) §5），
+[`../../docs/Go微服务-问题解决记录.md`](../../docs/Go微服务-问题解决记录.md) §5），
 要从真实库反向导出。
 
 ---

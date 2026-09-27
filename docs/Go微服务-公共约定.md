@@ -33,7 +33,14 @@
 三个服务与 Java 服务**平铺同级**，各自独立 `go.mod`（不引入 go.work，避免影响其他 Go 项目）。
 
 ```text
-service/
+media-community-backend/          # 仓库根（8 个服务在本地各自是独立仓库）
+├── README.md                     # 项目总览：整体架构 + 接口测试
+├── docs/                         # 跨服务文档
+│   ├── 直播，点播，弹幕设计方案.md   # 总体方案
+│   ├── Go微服务-README.md         # Go 三服务说明
+│   ├── Go微服务-公共约定.md        # 本文档
+│   ├── Go微服务-问题解决记录.md     # 踩坑记录与排查清单
+│   └── 接口测试文档-商品与订单.md
 ├── deploy/                       # ★ 部署总入口（Java + Go 两套共用）
 │   ├── README.md                 # 部署总入口文档
 │   ├── .env.example              # 环境变量示例（复制成 deploy/.env）
@@ -47,7 +54,12 @@ service/
 │   │   └── verify-schema.ps1     # 校验该 DDL 与 AutoMigrate 实际产出是否完全一致
 │   ├── media/srs.conf            # SRS 直播媒体服务器配置
 │   └── k8s/                      # Kubernetes 清单
-├── Go微服务-公共约定.md            # 本文档
+├── tools/publish-all.ps1         # 聚合快照发布脚本
+├── gateway-service/              # Java 网关
+├── auth-service/                 # Java 鉴权
+├── user-service/                 # Java 用户
+├── product-service/              # Java 商品
+├── order-service/                # Java 订单
 ├── video-service-go/             # 点播服务
 ├── live-service-go/              # 直播服务
 └── danmaku-service-go/           # 弹幕服务
@@ -179,7 +191,7 @@ Java 侧已占用的表（**Go 侧不得使用这些名字**）：
 
 ## 4. 错误码规范
 
-沿用 Java 侧编号（见工作区 `接口测试文档-商品与订单.md` §1.6），并补充媒体业务专用段：
+沿用 Java 侧编号（见同目录 [`接口测试文档-商品与订单.md`](接口测试文档-商品与订单.md) §1.6），并补充媒体业务专用段：
 
 | code | HTTP | 含义 | 使用范围 |
 | --- | --- | --- | --- |

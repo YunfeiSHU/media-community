@@ -1178,9 +1178,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/db/verify-schema.ps1
 
 | 文档 | 内容 |
 | --- | --- |
-| `Go微服务-README.md` | 服务一览、架构、快速开始、技术栈落点 |
-| `Go微服务-公共约定.md` | 目录结构、错误码、响应体、身份约定、**消息拓扑与命名规则（§7.1/§7.2）** |
-| `直播，点播，弹幕设计方案.md` | 总体方案 |
+| `docs/Go微服务-README.md` | 服务一览、架构、快速开始、技术栈落点 |
+| `docs/Go微服务-公共约定.md` | 目录结构、错误码、响应体、身份约定、**消息拓扑与命名规则（§7.1/§7.2）** |
+| `docs/直播，点播，弹幕设计方案.md` | 总体方案 |
 | `<service>/docs/需求文档.md` `设计文档.md` `接口文档.md` | 各服务的三段式文档 |
 | `deploy/README.md` | 部署总入口：目录结构、端口表、三种启动方式 |
 | `deploy/db/README.md` | 共用库 `auth_service` 全部 17 张表的归属与建表顺序 |

@@ -1,6 +1,6 @@
 # Go 媒体微服务群（点播 / 直播 / 弹幕）
 
-依据工作区根目录《直播，点播，弹幕设计方案.md》落地的一套 **Go 微服务**，
+依据同目录《[直播，点播，弹幕设计方案.md](直播，点播，弹幕设计方案.md)》落地的一套 **Go 微服务**，
 与已有 Java 体系（网关 / 鉴权 / 用户 / 商品 / 订单）**平铺同级、契约对齐**，两套可同时运行。
 
 **数据层与 Java 体系共用**：直接用 Java 那套 MySQL（`127.0.0.1:3306`，库 `auth_service`）
@@ -8,7 +8,7 @@
 共库/共实例靠命名空间隔离：**表名前缀 `media_`** + **Redis key 域前缀 `video:` / `live:` / `danmaku:`**。
 只有 RabbitMQ 与 MinIO 是 Go 这套独有的组件（Java 侧没有），由 `deploy/compose.infra.yml` 提供。
 
-**部署入口已经统一到 [`deploy/README.md`](deploy/README.md)**：编排文件、环境变量模板、
+**部署入口已经统一到 [`../deploy/README.md`](../deploy/README.md)**：编排文件、环境变量模板、
 数据库基线、K8s 清单全部在 `deploy/` 下，覆盖 Java 与 Go 两套体系。
 
 ---
@@ -17,9 +17,9 @@
 
 | 服务 | 端口 | 库 / 表前缀 | 核心职责 | 文档 |
 | --- | --- | --- | --- | --- |
-| `video-service-go` | 9001 | `auth_service` / `media_video*` | 视频上传、异步转码、HLS 点播、发布 | [需求](video-service-go/docs/需求文档.md) · [设计](video-service-go/docs/设计文档.md) · [接口](video-service-go/docs/接口文档.md) |
-| `live-service-go` | 9002 | `auth_service` / `media_live_*` | 直播间、开播/关播、推拉流地址、在线人数 | [需求](live-service-go/docs/需求文档.md) · [设计](live-service-go/docs/设计文档.md) · [接口](live-service-go/docs/接口文档.md) |
-| `danmaku-service-go` | 9003 | `auth_service` / `media_danmaku`、`media_sensitive_word` | 弹幕 WebSocket 广播、敏感词、限流、异步落库 | [需求](danmaku-service-go/docs/需求文档.md) · [设计](danmaku-service-go/docs/设计文档.md) · [接口](danmaku-service-go/docs/接口文档.md) |
+| `video-service-go` | 9001 | `auth_service` / `media_video*` | 视频上传、异步转码、HLS 点播、发布 | [需求](../video-service-go/docs/需求文档.md) · [设计](../video-service-go/docs/设计文档.md) · [接口](../video-service-go/docs/接口文档.md) |
+| `live-service-go` | 9002 | `auth_service` / `media_live_*` | 直播间、开播/关播、推拉流地址、在线人数 | [需求](../live-service-go/docs/需求文档.md) · [设计](../live-service-go/docs/设计文档.md) · [接口](../live-service-go/docs/接口文档.md) |
+| `danmaku-service-go` | 9003 | `auth_service` / `media_danmaku`、`media_sensitive_word` | 弹幕 WebSocket 广播、敏感词、限流、异步落库 | [需求](../danmaku-service-go/docs/需求文档.md) · [设计](../danmaku-service-go/docs/设计文档.md) · [接口](../danmaku-service-go/docs/接口文档.md) |
 
 **公共约定**：[Go微服务-公共约定.md](Go微服务-公共约定.md) —— 目录结构 / 统一响应 / 错误码 / 身份传递 / 消息拓扑 / Redis 命名。
 

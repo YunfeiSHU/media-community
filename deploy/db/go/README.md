@@ -57,4 +57,4 @@ mysql -h127.0.0.1 -uroot -p --default-character-set=utf8mb4 auth_service < deplo
 
 完整的发现过程、`information_schema` 比对 SQL、以及为什么校验脚本**必须在临时库里真跑一遍**
 （因为 `CREATE TABLE IF NOT EXISTS` 对着已有表执行是空操作，那样的校验永远通过），
-见 **`../../../Go微服务-问题解决记录.md` §5**。
+见 **`../../../docs/Go微服务-问题解决记录.md` §5**。

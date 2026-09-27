@@ -20,11 +20,11 @@
       本地 8 个仓库的历史不受任何影响，仍各自独立管理。
 
 .PARAMETER PublishDir
-    聚合快照目录。默认是工作区的同级目录 service-all（放在工作区外，
+    聚合快照目录。默认是工作区的同级目录，名字与 RepoName 相同（放在工作区外，
     避免 robocopy 自我递归，也避免根仓库需要额外忽略它）。
 
 .PARAMETER RepoName
-    远端总仓库名，默认 service-all。
+    远端总仓库名，默认 media-community-backend。
 
 .PARAMETER Owner
     GitHub 账号。默认从 git config 的 noreply 邮箱推断。
@@ -54,7 +54,7 @@
 [CmdletBinding()]
 param(
     [string] $PublishDir,
-    [string] $RepoName = 'service-all',
+    [string] $RepoName = 'media-community-backend',
     [string] $Owner,
     [ValidateSet('private', 'public')] [string] $Visibility = 'private',
     [string] $Message,
