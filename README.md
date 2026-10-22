@@ -469,14 +469,14 @@ curl.exe -i "$GW/ws/danmaku?roomId=5001&access_token=$TOKEN"   # 101 Switching P
 ## 7. 目录结构
 
 ```text
-media-platform-backend/     # 9 个独立 git 仓库的聚合快照（8 服务 + 1 根仓库，由 tools/publish-all.ps1 生成）
+media-platform-backend/     # 单仓多服务：8 个服务 + 跨服务文档 + 部署编排
 ├── deploy/                 # compose*.yml、db/ DDL 基线、media/srs.conf、k8s/（部署入口见 deploy/README.md）
 ├── docs/                   # 跨服务文档：公共约定 / 问题解决记录 / 接口测试
 ├── gateway-service/ auth-service/ user-service/ product-service/ order-service/   # Java
 └── video-service-go/ live-service-go/ danmaku-service-go/                         # Go
 ```
 
-> 完整提交历史保留在各服务本地仓库，本仓库只做整体浏览与分享。
+> 所有服务与文档都在本仓库内，`git log` 可见完整历史；跨服务的改动（例如一次接口字段改名要同时改网关、服务端与文档）落在**一条**提交里。
 
 ---
 
