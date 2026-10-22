@@ -1,0 +1,179 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: gateway-service
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        namespace: ${NACOS_NAMESPACE:}
+        group: DEFAULT_GROUP
+        register-enabled: true
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        file-extension: yaml
+        import-check:
+          enabled: false
+    gateway:
+      discovery:
+        locator:
+          # 关闭自动路由，避免 /user-service/** 这类隐式路径暴露
+          enabled: false
+      routes:
+        # 用户服务
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/**,/api/v1/admin/users/**
+        # 认证服务
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+        # 商品服务
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**,/api/v1/skus/**
+        # 订单服务（订单 + 支付回调）
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**,/api/v1/payments/**
+        # ============================== Go 体系 ==============================
+        # Go 三服务**未接入 Nacos**（见 docs/Go微服务-公共约定.md §2），注册中心里没有它们，
+        # 所以这里不能用 lb://，只能直连。URI 走环境变量，便于容器 / 集群里改成服务名。
+        # 身份传递与 Java 侧完全一致：网关注入 X-User-Id / X-User-Role，Go 侧不解析 JWT。
+        # 点播服务
+        - id: video-service-go
+          uri: ${VIDEO_SERVICE_URI:http://localhost:9001}
+          predicates:
+            - Path=/api/v1/categories/**,/api/v1/videos/**
+        # 直播服务（含 SRS http_hooks 回调路径）
+        - id: live-service-go
+          uri: ${LIVE_SERVICE_URI:http://localhost:9002}
+          predicates:
+            - Path=/api/v1/live/**
+        # 弹幕服务（REST + WebSocket）。
+        # /ws/danmaku 不走 /api/v1 前缀，是长连接入口，单独列出；
+        # Spring Cloud Gateway 会自动把带 Upgrade 头的请求按 WebSocket 代理。
+        - id: danmaku-service-go
+          uri: ${DANMAKU_SERVICE_URI:http://localhost:9003}
+          predicates:
+            - Path=/api/v1/danmaku/**,/ws/danmaku
+      # 全局默认过滤器
+      default-filters:
+        # 移除下游服务不需要的敏感头
+        - RemoveRequestHeader=Cookie
+        - RemoveRequestHeader=Set-Cookie
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 10s
+
+# 网关自身的 JWT 配置
+gateway:
+  auth:
+    # 无需认证即可访问的路径
+    # 两种写法：
+    #   1) "/path/**"        —— 任意方法均可访问
+    #   2) "GET /path/*"     —— 仅指定 HTTP 方法可访问（方法 + 空格 + 路径），其余方法仍走 JWT
+    # 注意：Ant 的 * 只匹配单个路径段，"/api/v1/products/*" 不会匹配 "/api/v1/products/1/skus"
+    permit-all:
+      # ============================ Java 体系 ============================
+      # 认证服务：登录 / 刷新令牌 / 发送验证码 / 两种注册方式。
+      # 路径必须与 AuthController 的 @PostMapping 逐字一致。
+      # 历史问题：这里曾写成 /api/v1/auth/refresh 与 /api/v1/auth/register，
+      # 而真实路径是 /token/refresh、/register/phone、/register/email，
+      # 匹配不上任何真实路径 → 经网关注册、刷新令牌、发验证码一律 401。
+      - POST /api/v1/auth/login
+      - POST /api/v1/auth/token/refresh
+      - POST /api/v1/auth/verification/send
+      - POST /api/v1/auth/register/phone
+      - POST /api/v1/auth/register/email
+      # 商品详情、SKU详情：仅 GET 对外公开；创建/修改/删除/上下架/价格/库存等仍必须过 JWT
+      - GET /api/v1/products/*
+      - GET /api/v1/skus/*
+      # 支付渠道异步回调：渠道服务器无法携带用户令牌，必须免 JWT；
+      # 该分支会清掉 uid / X-User-Id / X-User-Role，order-service 侧靠支付单反查身份 + 报文验签保证安全
+      - POST /api/v1/payments/callback
+
+      # ============================= Go 体系 =============================
+      # --- video-service-go ---
+      # 分类列表与视频读接口公开（可见性在 service 层判定）；
+      # 注意 "/api/v1/videos/*" 只覆盖详情，"/:id/play" 需要单独一条（Ant 的 * 只匹配单段）
+      - GET /api/v1/categories
+      - GET /api/v1/videos
+      - GET /api/v1/videos/*
+      - GET /api/v1/videos/*/play
+      # --- live-service-go ---
+      # 直播间读接口：游客可见（streamKey / pushUrl 由服务按调用者身份裁剪）
+      - GET /api/v1/live/rooms
+      - GET /api/v1/live/rooms/*
+      - GET /api/v1/live/rooms/*/online
+      - GET /api/v1/live/rooms/*/play
+      # 观众心跳：登录可选，游客用 X-Session-Id（登录用户仍可由网关注入身份）
+      - POST /api/v1/live/rooms/*/heartbeat
+      # SRS http_hooks 回调：SRS 侧不带用户令牌，靠 streamKey / hook_secret 自行校验
+      - POST /api/v1/live/hooks/**
+      # 本地联调用的「模拟推流 / 断流」：服务侧仅在 debug 模式注册这两个路由，
+      # 非 debug 环境根本不存在，因此这里放行不会扩大生产暴露面
+      - POST /api/v1/live/dev/**
+      # --- danmaku-service-go ---
+      # 历史弹幕与统计公开；发送 / 撤回 / 管理接口仍需 JWT
+      - GET /api/v1/danmaku/rooms/*/history
+      - GET /api/v1/danmaku/videos/*/history
+      - GET /api/v1/danmaku/stats
+    jwt:
+      # 生产环境务必通过环境变量注入，不要提交到仓库
+      secret: ${JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}
+      # 用户 ID 固定取 JWT 标准 claim `sub`（auth-service 签发时写入用户 uid），无对应配置项
+      # 从 token 中提取角色的 claim 名
+      role-claim: role
+      # 允许「从查询参数取令牌」的路径（Ant 风格）。
+      # 只用于浏览器 WebSocket：浏览器 new WebSocket(url) **无法自定义请求头**，
+      # 只能把令牌放在 URL 上（形如 /ws/danmaku?roomId=5001&access_token=<jwt>）。
+      # 命中这些路径时令牌来源从 Authorization 头换成查询参数（查询参数名固定为 access_token），
+      # 但**仍然强制校验 JWT**（签名 / 签发方 / 受众 / 过期 / 黑名单），
+      # 并且转发前会把 access_token 从 URL 上摘掉，避免令牌泄漏进下游访问日志。
+      # 不在此列表中的路径一律只能走 Authorization 头。
+      token-query-paths:
+        - /ws/danmaku
+  rate-limit:
+    # 全局限流配置
+    global-limit:
+      # Redis key 前缀
+      key-prefix: ${GATEWAY_RATE_LIMIT_GLOBAL_KEY_PREFIX:gateway:rate:global}
+      # 每秒补充的令牌数
+      replenish-rate: ${GATEWAY_RATE_LIMIT_GLOBAL_REPLENISH_RATE:10000}
+      # 最大令牌数（容量）
+      burst-capacity: ${GATEWAY_RATE_LIMIT_GLOBAL_BURST_CAPACITY:10000}
+    # IP 限流配置
+    ip-limit:
+      # Redis key 前缀
+      key-prefix: ${GATEWAY_RATE_LIMIT_IP_KEY_PREFIX:gateway:rate:ip}
+      # 每秒补充的令牌数
+      replenish-rate: ${GATEWAY_RATE_LIMIT_IP_REPLENISH_RATE:100}
+      # 最大令牌数（容量）
+      burst-capacity: ${GATEWAY_RATE_LIMIT_IP_BURST_CAPACITY:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - gateway
+  endpoint:
+    health:
+      show-details: always
