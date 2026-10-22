@@ -2,7 +2,7 @@
 -- order-service 建表脚本（MySQL 8，手工执行）
 -- 库：auth_service（5 个 Java 服务共用同一个库，靠表名区分；Java 服务的表名不带 media_ 前缀）
 --
--- 说明：与《设计文档.md》的表结构保持一致，两处按实际 RPC 契约做了修正：
+-- 说明：与初版 DDL 的表结构一致，两处按实际 RPC 契约做了修正：
 --   1) order_item.product_id / sku_id 由 BIGINT 改为 VARCHAR(32)
 --      原因：product-service 的 RPC 契约（SkuDTO.productId / SkuDTO.skuId）对外只暴露业务编号，
 --            order-service 拿不到商品/SKU 的内部自增 ID
