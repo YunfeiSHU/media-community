@@ -1,0 +1,54 @@
+server:
+  port: ${SERVER_PORT:8001}
+
+dubbo:
+  application:
+    name: user-service
+    qos-enable: ${DUBBO_QOS_ENABLE:false}
+  protocol:
+    # 作为服务提供者对外暴露的 Dubbo 端口；-1 = 随机分配（本服务不需要固定端口，
+    # 容器也不映射它：调用方是走注册中心发现地址的，不依赖固定端口）
+    name: dubbo
+    port: ${DUBBO_PROTOCOL_PORT:-1}
+  registry:
+    address: ${NACOS_REGISTRY_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+    register: true # 注册Nacos服务，默认true：作为服务提供者，把自己的地址注册到注册中心 
+    #服务提供者： 实现 @DubboService的 类，Dubbo默认实现服务注册
+    register-mode: instance
+    # 设置注册模式：
+    # all: 双注册（默认，兼容Dubbo 2.x 接口级注册）
+    # instance: 仅应用级注册（推荐）
+    # interface: 仅接口级注册
+    subscribe: true # 订阅Nacos服务，默认true：作为服务消费者，从注册中心订阅其他服务的地址列表
+    # 服务消费者：@DubboReference 注入的类，Dubbo默认实现服务订阅
+  scan:
+    base-packages: com.example.userservice.rpc
+
+spring:
+  application:
+    name: user-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        register-enabled: true
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:***REMOVED***}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.example.userservice.repository: debug
