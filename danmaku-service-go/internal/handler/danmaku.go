@@ -39,7 +39,7 @@ func (h *DanmakuHandler) Send(c *gin.Context) {
 
 // SendToRoom 处理 `POST /api/v1/danmaku/rooms/:roomId/send`。
 //
-// 与 Send 共用同一 service 方法，只是把 roomId 从路径取（需求文档 FR-2.1 的写法），
+// 与 Send 共用同一 service 方法，只是把 roomId 从路径取，
 // 两种路径并存是为了让契约与既有调用方都能对上，不会产生两套业务逻辑。
 func (h *DanmakuHandler) SendToRoom(c *gin.Context) {
 	user, err := requireUser(c)

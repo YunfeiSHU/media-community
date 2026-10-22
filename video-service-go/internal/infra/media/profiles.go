@@ -21,7 +21,7 @@ type Profile struct {
 // Bandwidth 是 HLS 主索引里声明的带宽（bit/s），用于播放器自适应选择。
 func (p Profile) Bandwidth() int { return (p.VideoKbps + p.AudioKbps) * 1000 }
 
-// DefaultProfiles 是三档默认转码配置（与需求文档 / 接口文档中的 sources 一致）。
+// DefaultProfiles 是三档默认转码配置（与《接口文档》里 sources 的三档一致）。
 var DefaultProfiles = []Profile{
 	{Name: "360p", Width: 640, Height: 360, VideoKbps: 700, AudioKbps: 96},
 	{Name: "720p", Width: 1280, Height: 720, VideoKbps: 2400, AudioKbps: 128},

@@ -2,7 +2,7 @@
 //
 // 编号规范与工作区 Java 侧保持一致（见《Go微服务-公共约定.md》§4）：
 // 40001 参数、40101 未认证、40301 无权限、404xx 不存在、409xx 冲突、429xx 限流、
-// 5xxxx 内部/依赖，6xxxx 为 video 域专用段。
+// 5xxxx 内部/依赖，8xxxx 为 danmaku 域专用段。
 package errs
 
 import (
@@ -105,7 +105,10 @@ func AsBizError(err error) (*BizError, bool) {
 }
 
 // Is 判断 err 是否属于指定错误码（用于上层分支处理）。
+//
+// 比较整个 ErrorCode 而不是只比 Code：CodeRecallWindowExpired 刻意复用了对外
+// code 40001（HTTP 却是 409），只比 Code 会把它当成普通参数错误。
 func Is(err error, code ErrorCode) bool {
 	be, ok := AsBizError(err)
-	return ok && be.Code.Code == code.Code
+	return ok && be.Code == code
 }

@@ -56,7 +56,7 @@ func New(cfg *config.Config, log *slog.Logger, h Handlers) *gin.Engine {
 	// ---------------------------------------------------------- 写接口（必须登录）
 	authed := danmaku.Group("", middleware.Auth())
 	authed.POST("/send", h.Danmaku.Send)
-	// 需求文档 FR-2.1 的等价路径：roomId 放在路径里，避免与点播弹幕请求体混淆。
+	// 等价路径：roomId 放在路径里，避免与点播弹幕的请求体混淆。
 	authed.POST("/rooms/:roomId/send", h.Danmaku.SendToRoom)
 	authed.DELETE("/:danmakuId", h.Danmaku.Recall)
 

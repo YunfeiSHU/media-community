@@ -22,7 +22,7 @@ import (
 	"github.com/example/live-service-go/pkg/errs"
 )
 
-// 字段长度限制，与《需求文档》/ DDL 保持一致。
+// 字段长度限制，与《设计文档》/ DDL 保持一致。
 const (
 	maxTitleLen  = 64
 	maxNoticeLen = 512

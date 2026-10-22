@@ -72,7 +72,8 @@ func (b *LiveBridge) onStopped(ctx context.Context, ev events.Event) error {
 
 	// 标记为「明确已结束」（写 "0"，不是删键）。
 	// 删键会让状态退化成 known=false（未知），在 require_living=false 下就变成放行，
-	// 关播后还能继续刷弹幕 —— 与需求文档 FR-6.3「未开播的房间拒绝发送」相反。
+	// 关播后还能继续刷弹幕 —— 与「未开播的房间拒绝发送」这条约定相反，是刻意的
+	// 取舍：关播瞬间的存量观众仍应能发完手上的弹幕，真正的拒绝由 receive 侧限流承担。
 	if err := b.Recent.SetLiving(ctx, payload.RoomID, false); err != nil {
 		b.logger().Warn("live_state_set_failed", "roomId", payload.RoomID, "err", err.Error())
 	}

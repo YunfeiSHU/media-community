@@ -94,7 +94,10 @@ func AsBizError(err error) (*BizError, bool) {
 }
 
 // Is 判断 err 是否属于指定错误码（用于上层分支处理）。
+//
+// 比较整个 ErrorCode 而不是只比 Code：有的码刻意复用对外 code（例如「撤回超窗」
+// 沿用 40001 但 HTTP 是 409），只比 Code 会把两者混为一谈。
 func Is(err error, code ErrorCode) bool {
 	be, ok := AsBizError(err)
-	return ok && be.Code.Code == code.Code
+	return ok && be.Code == code
 }
