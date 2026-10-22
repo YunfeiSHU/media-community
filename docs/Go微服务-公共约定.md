@@ -272,7 +272,7 @@ viper / mapstructure，结构体字段用 `yaml` tag 与文件键名一一对应
 
 ```yaml
 mysql:
-  dsn: "${VIDEO_MYSQL_DSN:-root:***REMOVED***@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
+  dsn: "${VIDEO_MYSQL_DSN:-root:<password>@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
 redis:
   # 与 Java 共用：同一个实例、同一个 db 0
   addr: "${VIDEO_REDIS_ADDR:-127.0.0.1:6379}"

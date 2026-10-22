@@ -6,7 +6,7 @@
 # 起不到校验作用，所以必须换库执行。
 
 $ErrorActionPreference = "Stop"
-$env:MYSQL_PWD = '***REMOVED***'
+if (-not $env:MYSQL_PWD) { throw '请先设置 MYSQL_PWD 环境变量（不要写进脚本）' }
 # 脚本与 DDL 在同一个目录树里，用 $PSScriptRoot 定位，不依赖当前工作目录：
 #   deploy/db/verify-schema.ps1  ← 本脚本
 #   deploy/db/go/media-tables.sql ← 被校验的基线

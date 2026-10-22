@@ -63,7 +63,7 @@ services:
       SPRING_SQL_INIT_MODE: always
       SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
       SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
-      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:?请在 deploy/.env 里设置 SHARED_MYSQL_PASSWORD（模板见 deploy/.env.example）}
       SPRING_DATA_REDIS_HOST: ${INFRA_REDIS_HOST:-host.docker.internal}
       SPRING_DATA_REDIS_PORT: "6379"
       NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
@@ -88,7 +88,7 @@ services:
       # 该服务用的是自定义变量名 MYSQL_URL / MYSQL_USERNAME / MYSQL_PASSWORD
       MYSQL_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
       MYSQL_USERNAME: ${SHARED_MYSQL_USER:-root}
-      MYSQL_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      MYSQL_PASSWORD: ${SHARED_MYSQL_PASSWORD:?请在 deploy/.env 里设置 SHARED_MYSQL_PASSWORD（模板见 deploy/.env.example）}
       SPRING_SQL_INIT_MODE: always
       NACOS_REGISTRY_ADDRESS: "nacos://${INFRA_NACOS_ADDR:-host.docker.internal:8848}"
       NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
@@ -113,7 +113,7 @@ services:
       # 见 deploy/db/README.md
       SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
       SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
-      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:?请在 deploy/.env 里设置 SHARED_MYSQL_PASSWORD（模板见 deploy/.env.example）}
       NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
@@ -136,7 +136,7 @@ services:
       SERVER_PORT: "8004"
       SPRING_DATASOURCE_URL: "jdbc:mysql://${INFRA_MYSQL_HOST:-host.docker.internal}:${INFRA_MYSQL_PORT:-3306}/${SHARED_MYSQL_DATABASE:-auth_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
       SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USER:-root}
-      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD:?请在 deploy/.env 里设置 SHARED_MYSQL_PASSWORD（模板见 deploy/.env.example）}
       # 单机直连：product-service 的 Dubbo 端口用服务名解析（不用注册中心）
       PRODUCT_RPC_URL: "dubbo://product-service:20880"
       PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-order-service-callback-secret}

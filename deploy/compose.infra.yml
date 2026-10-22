@@ -33,7 +33,7 @@ services:
     container_name: gomedia-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${SHARED_MYSQL_PASSWORD:-***REMOVED***}
+      MYSQL_ROOT_PASSWORD: ${SHARED_MYSQL_PASSWORD:?请在 deploy/.env 里设置 SHARED_MYSQL_PASSWORD（模板见 deploy/.env.example）}
       MYSQL_DATABASE: ${SHARED_MYSQL_DATABASE:-auth_service}
       TZ: Asia/Shanghai
     command:

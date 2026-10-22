@@ -126,10 +126,11 @@ graph TB
 
 ## 4. 三种启动方式
 
-先准备变量文件（可选，所有变量都有内置默认值）：
+先准备变量文件（`SHARED_MYSQL_PASSWORD` 是必填项，其余都有内置默认值）：
 
 ```powershell
 Copy-Item deploy\.env.example deploy\.env
+# 编辑 deploy/.env：把 SHARED_MYSQL_PASSWORD=change-me 换成你自己的口令
 ```
 
 ### 方式 A：本机已经有中间件（**默认，也是本机现状**）

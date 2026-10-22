@@ -16,7 +16,7 @@ app:
 
 mysql:
   # 与 Java 共用：同一个 MySQL 实例、同一个 auth_service 库（表名 media_danmaku / media_sensitive_word）
-  dsn: "${DANMAKU_MYSQL_DSN:-root:***REMOVED***@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
+  dsn: "${DANMAKU_MYSQL_DSN:-root:@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local}"
   max_open: 50
   max_idle: 10
   conn_max_lifetime: 30m

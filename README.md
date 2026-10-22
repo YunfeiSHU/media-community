@@ -193,6 +193,10 @@ Go 三服务之间**没有 gRPC、没有同步 RPC**，网关对 Go 是直连 `u
 ```powershell
 # 复制环境变量模板（Compose 只读取与 compose 文件同目录的 .env）
 Copy-Item deploy\.env.example deploy\.env
+# 然后把 .env 里的 SHARED_MYSQL_PASSWORD 改成你自己的口令：
+#   compose 里写的是 ${SHARED_MYSQL_PASSWORD:?…}，**缺这个变量会直接报错**
+#   应用侧的 Java 服务同理：password 从 ${SPRING_DATASOURCE_PASSWORD} / ${MYSQL_PASSWORD} 读，
+#   仓库里不再保存任何口令。
 
 # 启动中间件（MySQL / Redis / RabbitMQ / MinIO / Nacos）
 docker compose -f deploy\compose.infra.yml --profile infra up -d
