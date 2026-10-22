@@ -212,6 +212,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy\db\verify-schema.ps1 
 
 启动顺序：**中间件（含 Nacos）→ auth / user / product / order → gateway → Go 三服务**（Go 不依赖 Nacos）。Nacos 没起来时 Java 服务注册不上，网关的 `lb://` 会解析不到实例。
 
+> **启动前必须设口令**（仓库里不再保存任何口令）。同一个终端里先执行：
+>
+> ```powershell
+> # 换成你自己的口令；值取自 deploy/.env 的 SHARED_MYSQL_PASSWORD
+> $env:SPRING_DATASOURCE_PASSWORD = "<你的口令>"   # auth / product / order
+> $env:MYSQL_PASSWORD              = "<你的口令>"   # user
+> # Go 三服务：DSN 默认值口令为空，需显式给连接串
+> $env:VIDEO_MYSQL_DSN   = "root:<你的口令>@tcp(127.0.0.1:3306)/auth_service?charset=utf8mb4&parseTime=True&loc=Local"
+> $env:LIVE_MYSQL_DSN    = $env:VIDEO_MYSQL_DSN
+> $env:DANMAKU_MYSQL_DSN = $env:VIDEO_MYSQL_DSN
+> ```
+>
+> 不给的话：Java 侧启动即报 `Could not resolve placeholder`；Go 侧能起但连库认证失败、`/readyz` 会报 mysql 不可用。
+
 **Java 体系**（5 个服务，各自独立终端；也可用 `deploy/compose.java.yml` 容器化启动）：
 
 ```powershell
