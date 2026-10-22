@@ -1,0 +1,84 @@
+server:
+  port: ${SERVER_PORT:8002}
+  # 经网关访问时 getRemoteAddr() 拿到的是网关地址；开启后 Spring 会按 X-Forwarded-For
+  # 还原真实客户端 IP。登录限流（LoginRateLimitService）按真实 IP 分桶，依赖本项。
+  forward-headers-strategy: framework
+
+dubbo:
+  application:
+    name: auth-service
+    qos-enable: ${DUBBO_QOS_ENABLE:false}
+  registry:
+    address: ${DUBBO_REGISTRY_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+  metadata-report:
+    address: ${DUBBO_METADATA_REPORT_ADDRESS:nacos://localhost:8848}
+    username: ${NACOS_USERNAME:nacos}
+    password: ${NACOS_PASSWORD:nacos}
+  consumer:
+    timeout: ${DUBBO_TIMEOUT:3000}
+    check: false
+
+spring:
+  application:
+    name: auth-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:always}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:***REMOVED***}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name:auth-service}
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+auth:
+  jwt:
+    # 必须与 gateway-service 的 gateway.auth.jwt.secret 用同一把密钥，否则 auth 签发的 token
+    # 在网关上验签失败 → 所有带 token 的请求一律 401（历史踩坑：两侧变量名与默认值都不同）。
+    # 同时支持 JWT_SECRET（与网关一致，推荐）与 AUTH_JWT_SECRET（历史名）。
+    secret: ${JWT_SECRET:${AUTH_JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}}
+    access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:1800}
+    refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:604800}
+  verification:
+    # 学习模式：验证码随 /verification/send 响应返回并写入服务日志（本项目的邮件/短信 Provider 只是桩实现）。
+    # 生产环境必须置为 false。
+    expose-code: ${AUTH_VERIFICATION_EXPOSE_CODE:true}
+  login-rate-limit:
+    max-attempts: ${AUTH_LOGIN_RATE_LIMIT_MAX_ATTEMPTS:5}
+    window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS:60}
+
+
+logging:
+  level:
+    root: INFO
+    com.example.authservice: DEBUG
+    com.example.authservice.repository: DEBUG
