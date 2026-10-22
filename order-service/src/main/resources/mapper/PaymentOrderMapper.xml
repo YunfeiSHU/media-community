@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.order.mapper.PaymentOrderMapper">
+
+    <sql id="Base_Column_List">
+        id, payment_id, order_id, uid, amount, status, payment_channel, transaction_id,
+        expire_at, paid_at, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="PaymentOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO payment_order
+            (payment_id, order_id, uid, amount, status, payment_channel, expire_at)
+        VALUES
+            (#{paymentId}, #{orderId}, #{uid}, #{amount}, #{status}, #{paymentChannel}, #{expireAt})
+    </insert>
+
+    <select id="selectByPaymentId" resultType="PaymentOrder">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM payment_order
+        WHERE payment_id = #{paymentId}
+    </select>
+
+    <!-- 取最近一张未支付的支付单：创建支付单接口据此做幂等复用 -->
+    <select id="selectWaitPayByOrderId" resultType="PaymentOrder">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM payment_order
+        WHERE order_id = #{orderId}
+          AND status = 0
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectByTransactionId" resultType="PaymentOrder">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM payment_order
+        WHERE transaction_id = #{transactionId}
+    </select>
+
+    <!-- WAIT_PAY(0) → PAID(1)：带原状态校验，重复回调时只会成功一次 -->
+    <update id="markPaid">
+        UPDATE payment_order
+        SET status = 1,
+            transaction_id = #{transactionId},
+            paid_at = #{paidAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE payment_id = #{paymentId}
+          AND status = 0
+    </update>
+
+    <update id="updateStatus">
+        UPDATE payment_order
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE payment_id = #{paymentId}
+        <if test="expectedStatus != null">
+            AND status = #{expectedStatus}
+        </if>
+    </update>
+
+    <!-- 订单取消 / 超时：把所有未支付的支付单一并关闭 -->
+    <update id="closeWaitPayByOrderId">
+        UPDATE payment_order
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE order_id = #{orderId}
+          AND status = 0
+    </update>
+</mapper>

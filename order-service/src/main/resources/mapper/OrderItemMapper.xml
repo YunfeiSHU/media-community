@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.order.mapper.OrderItemMapper">
+
+    <sql id="Base_Column_List">
+        id, order_id, product_id, sku_id, product_name, sku_name, unit_price, quantity, total_amount, created_at
+    </sql>
+
+    <insert id="batchInsert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO order_item
+            (order_id, product_id, sku_id, product_name, sku_name, unit_price, quantity, total_amount)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{item.orderId}, #{item.productId}, #{item.skuId}, #{item.productName},
+             #{item.skuName}, #{item.unitPrice}, #{item.quantity}, #{item.totalAmount})
+        </foreach>
+    </insert>
+
+    <select id="selectByOrderId" resultType="OrderItem">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM order_item
+        WHERE order_id = #{orderId}
+        ORDER BY id
+    </select>
+
+    <select id="selectByOrderIds" resultType="OrderItem">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM order_item
+        WHERE order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId}
+        </foreach>
+        ORDER BY order_id, id
+    </select>
+</mapper>

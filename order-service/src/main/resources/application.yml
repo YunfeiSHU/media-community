@@ -1,0 +1,83 @@
+server:
+  port: ${SERVER_PORT:8004}
+
+spring:
+  application:
+    name: order-service
+  cloud:
+    # 注册到 Nacos，网关才能用 lb://order-service 路由到这里
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        register-enabled: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/auth_service?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: ***REMOVED***
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 3000
+      connection-test-query: SELECT 1
+  jackson:
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.example.order.domain.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    default-statement-timeout: 5
+
+dubbo:
+  application:
+    name: order-service
+    qos-enable: false
+  registry:
+    # 本地联调：product-service 侧 dubbo.registry.address=N/A（不注册到注册中心），
+    # order-service 通过 order.rpc.product-url 直连其 20880 端口。
+    # 切到注册中心（Nacos）：把 DUBBO_REGISTRY_ADDRESS 配成 nacos://localhost:8848，
+    # 并【删掉】order.rpc.product-url 这一项（或删掉 ProductRpcClient 两个 @DubboReference 上的 url 属性），
+    # 否则 url 优先级更高，依旧会直连而不走注册中心发现。
+    address: ${DUBBO_REGISTRY_ADDRESS:N/A}
+  protocol:
+    # 消费方无需对外暴露服务，端口设为 -1 随机分配，避免与 product-service 的 20880 冲突
+    name: dubbo
+    port: -1
+  consumer:
+    timeout: 3000
+    retries: 0
+    check: false
+
+order:
+  # 待支付订单的超时时间（分钟）：创建订单时写入 expire_at，超时由定时任务取消
+  expire-minutes: 30
+  rpc:
+    # product-service 的 Dubbo 直连地址。本项优先于注册中心（Dubbo 中 url 的优先级高于软负载），
+    # 从直连改成注册中心发现时请【删掉这一项】，而不只是把它置空。
+    product-url: ${PRODUCT_RPC_URL:dubbo://127.0.0.1:20880}
+  payment:
+    # 支付渠道回调验签密钥（HmacSHA256）。
+    # 注意：这里故意没有报一个固定的默认值——默认值为公开仓库里可查到的字符串时，
+    # “已启用验签”只是假象，任何人都能凭仓库里的密钥伪造回调。
+    # 为空时跳过验签（会启动 WARN + 每次回调 WARN），仅供本地联调；生产必须通过环境变量配置。
+    callback-secret: ${PAYMENT_CALLBACK_SECRET:}
+  task:
+    # 超时取消 / 权益发放补偿定时任务开关（测试环境关闭）
+    enabled: true
+    batch-size: 100
+    scan-interval-ms: 60000
+    initial-delay-ms: 30000
+
+logging:
+  # 具体落地由 logback-spring.xml 决定：控制台 + logs/order-service/order-service.log 滚动文件
+  # 每行日志都会带 requestId=%X{requestId}，与网关 / user-service / auth-service / product-service 对齐
+  level:
+    root: INFO
+    "[com.example.order]": info
+    # 打印 MyBatis 执行的 SQL 与参数
+    "[com.example.order.mapper]": debug

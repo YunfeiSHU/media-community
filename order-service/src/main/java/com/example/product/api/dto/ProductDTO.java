@@ -1,0 +1,36 @@
+package com.example.product.api.dto;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.time.LocalDateTime;
+import lombok.Data;
+
+/**
+ * 商品 RPC 传输对象（与 product-service 的 {@code com.example.product.api.dto.ProductDTO} 字段一致）。
+ */
+@Data
+public class ProductDTO implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    /** 商品业务编号 */
+    private String productId;
+
+    /** 创建者UID */
+    private String uid;
+
+    private String name;
+
+    private String description;
+
+    private String coverUrl;
+
+    /** 商品类型 1-实物 2-虚拟 */
+    private Integer productType;
+
+    /** 商品状态 0-下架 1-上架 2-已删除 */
+    private Integer status;
+
+    private LocalDateTime createdAt;
+}
