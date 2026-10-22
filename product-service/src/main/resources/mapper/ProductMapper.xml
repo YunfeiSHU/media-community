@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.product.mapper.ProductMapper">
+
+    <sql id="Base_Column_List">
+        id, product_id, uid, name, description, cover_url, product_type, status, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="Product" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product (product_id, uid, name, description, cover_url, product_type, status)
+        VALUES (#{productId}, #{uid}, #{name}, #{description}, #{coverUrl}, #{productType}, #{status})
+    </insert>
+
+    <select id="selectById" resultType="Product">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByProductId" resultType="Product">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product
+        WHERE product_id = #{productId}
+    </select>
+
+    <update id="update" parameterType="Product">
+        UPDATE product
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="coverUrl != null">cover_url = #{coverUrl},</if>
+            <if test="productType != null">product_type = #{productType},</if>
+            <if test="status != null">status = #{status},</if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE product
+        SET status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        <if test="expectedStatus != null">
+            AND status = #{expectedStatus}
+        </if>
+    </update>
+
+</mapper>
