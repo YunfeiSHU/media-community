@@ -24,9 +24,8 @@ deploy/
 ├── compose.java.yml             Java 五服务 gateway/auth/user/product/order           profile: java
 ├── db/
 │   ├── README.md                共用库 auth_service 的全部 DDL 与执行顺序
-│   ├── go/media-tables.sql      Go 侧 8 张 media_* 表的 DDL 基线（幂等）
-│   ├── go/README.md            该基线的使用说明与约束
-│   └── verify-schema.ps1       校验「DDL 基线」与「GORM AutoMigrate 实际产出」是否一致
+│   ├── go/media-tables.sql      Go 侧 9 张 media_* 表的 DDL 基线（幂等）
+│   └── verify-schema.ps1       校验「DDL 基线」与「GORM AutoMigrate 实际产出」是否一致（22 项）
 ├── media/srs.conf              SRS 直播媒体服务器配置
 └── k8s/                        Kubernetes 清单（Traefik + Envoy sidecar 链路）
     ├── README.md
@@ -241,7 +240,7 @@ Envoy sidecar 服务间通信），与 compose 不冲突也不共用。见 [`k8s
 | 文档 | 内容 |
 | --- | --- |
 | [`db/README.md`](db/README.md) | 共用库的全部 DDL、归属与执行顺序 |
-| [`db/go/README.md`](db/go/README.md) | Go 侧 DDL 基线的约束（BOM、索引名、类型映射） |
+| [`db/go/media-tables.sql`](db/go/media-tables.sql) | Go 侧 DDL 基线（BOM、索引名、类型映射的约束见 `db/README.md` §6/§7） |
 | [`k8s/README.md`](k8s/README.md) | Kubernetes 部署步骤与设计说明 |
 | [`../docs/Go微服务-公共约定.md`](../docs/Go微服务-公共约定.md) | Go 侧的目录结构 / 响应格式 / 错误码 / 消息拓扑约定 |
 | [`../docs/Go微服务-问题解决记录.md`](../docs/Go微服务-问题解决记录.md) | 全部踩过并修复的坑（含 §9 按症状索引的排查清单） |
