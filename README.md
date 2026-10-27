@@ -7,12 +7,43 @@ B 站风格的音视频社区，前后端分离：React SPA + 8 个后端服务�
 
 ## 1. 技术栈
 
-| 层 | 技术 |
-| --- | --- |
-| 前端 | React 18 · TypeScript 5.6 · Vite 6 · React Router 6 · TanStack Query 5 · Zustand 5 · Tailwind 3 · hls.js / flv.js · Playwright |
-| Java 服务 | Java 17 · Spring Boot 3 · Spring Cloud Gateway 2023 · Nacos · OpenFeign · MyBatis · MySQL |
-| Go 服务 | Go 1.25 · Gin · GORM · MinIO SDK · WebSocket |
-| 基础设施 | MySQL 8 · Redis 7 · RabbitMQ · Nacos · MinIO · SRS 5 · Nginx · Docker Compose / K8s |
+**前端**
+
+![React 18](https://img.shields.io/badge/React_18-61DAFB?logo=react&logoColor=black&style=flat-square)
+![TypeScript 5.6](https://img.shields.io/badge/TypeScript_5.6-3178C6?logo=typescript&logoColor=white&style=flat-square)
+![Vite 6](https://img.shields.io/badge/Vite_6-646CFF?logo=vite&logoColor=white&style=flat-square)
+![React Router 6](https://img.shields.io/badge/React_Router_6-CA4245?logo=reactrouter&logoColor=white&style=flat-square)
+![TanStack Query 5](https://img.shields.io/badge/TanStack_Query_5-FF4154?logo=reactquery&logoColor=white&style=flat-square)
+![Zustand 5](https://img.shields.io/badge/Zustand_5-2D3748?style=flat-square)
+![Tailwind CSS 3](https://img.shields.io/badge/Tailwind_CSS_3-06B6D4?logo=tailwindcss&logoColor=white&style=flat-square)
+![hls.js](https://img.shields.io/badge/hls.js-1F2937?style=flat-square)
+![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square)
+
+**Java 服务**
+
+![Java 17](https://img.shields.io/badge/Java_17-ED8B00?logo=openjdk&logoColor=white&style=flat-square)
+![Spring Boot 3](https://img.shields.io/badge/Spring_Boot_3-6DB33F?logo=springboot&logoColor=white&style=flat-square)
+![Spring Cloud 2023](https://img.shields.io/badge/Spring_Cloud_2023-6DB33F?logo=spring&logoColor=white&style=flat-square)
+![MyBatis 3](https://img.shields.io/badge/MyBatis_3-B52E31?style=flat-square)
+![Nacos](https://img.shields.io/badge/Nacos-1F7A8C?style=flat-square)
+
+**Go 服务**
+
+![Go 1.25](https://img.shields.io/badge/Go_1.25-00ADD8?logo=go&logoColor=white&style=flat-square)
+![Gin](https://img.shields.io/badge/Gin-008ECF?logo=gin&logoColor=white&style=flat-square)
+![GORM](https://img.shields.io/badge/GORM-00ADD8?style=flat-square)
+![MinIO](https://img.shields.io/badge/MinIO-C72E49?logo=minio&logoColor=white&style=flat-square)
+![WebSocket](https://img.shields.io/badge/WebSocket-010101?style=flat-square)
+
+**基础设施**
+
+![MySQL 8](https://img.shields.io/badge/MySQL_8-4479A1?logo=mysql&logoColor=white&style=flat-square)
+![Redis 7](https://img.shields.io/badge/Redis_7-DC382D?logo=redis&logoColor=white&style=flat-square)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?logo=rabbitmq&logoColor=white&style=flat-square)
+![SRS 5](https://img.shields.io/badge/SRS_5-2B2B2B?style=flat-square)
+![Nginx](https://img.shields.io/badge/Nginx-009639?logo=nginx&logoColor=white&style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white&style=flat-square)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white&style=flat-square)
 
 ---
 
