@@ -6,6 +6,9 @@ import { useVideos } from '@/entities/video/queries';
 import { EmptyState, CardGridSkeleton } from '@/widgets/empty-state/EmptyState';
 import { LiveCard } from '@/widgets/live-card/LiveCard';
 import { VideoCard } from '@/widgets/video-card/VideoCard';
+import { Pagination } from '@/shared/ui/Pagination';
+
+const PAGE_SIZE = 12;
 
 /**
  * 首页：分类胶囊 + 推荐视频 + 正在直播。
@@ -15,9 +18,10 @@ import { VideoCard } from '@/widgets/video-card/VideoCard';
 export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryId = Number(searchParams.get('categoryId') ?? '') || undefined;
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
 
   const categoriesQuery = useCategories();
-  const videosQuery = useVideos({ page: 1, pageSize: 20, categoryId });
+  const videosQuery = useVideos({ page, pageSize: PAGE_SIZE, categoryId });
   const liveQuery = useLivingRooms(8);
 
   const ownerIds = [
@@ -27,11 +31,24 @@ export default function HomePage() {
   const profilesQuery = useProfiles(ownerIds);
   const nameOf = (uid: string) => profilesQuery.data?.find((profile) => profile.uid === uid)?.nickname;
 
+  const total = videosQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   function selectCategory(id?: number) {
     const next = new URLSearchParams(searchParams);
     if (id) next.set('categoryId', String(id));
     else next.delete('categoryId');
+    // 换分类回到第一页
+    next.delete('page');
     setSearchParams(next, { replace: true });
+  }
+
+  function goPage(next: number) {
+    const params = new URLSearchParams(searchParams);
+    if (next <= 1) params.delete('page');
+    else params.set('page', String(next));
+    setSearchParams(params);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   return (
@@ -69,11 +86,13 @@ export default function HomePage() {
             推荐
           </h2>
           {videosQuery.data && (
-            <span className="text-meta text-ink-tertiary">共 {videosQuery.data.total} 个视频</span>
+            <span className="text-meta text-ink-tertiary">
+              共 {videosQuery.data.total} 个视频 · 第 {page} / {totalPages} 页
+            </span>
           )}
         </div>
 
-        {videosQuery.isPending && <CardGridSkeleton count={10} />}
+        {videosQuery.isPending && <CardGridSkeleton count={PAGE_SIZE} />}
 
         {videosQuery.isError && (
           <EmptyState
@@ -96,11 +115,14 @@ export default function HomePage() {
         )}
 
         {videosQuery.isSuccess && videosQuery.data.items.length > 0 && (
-          <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {videosQuery.data.items.map((video) => (
-              <VideoCard key={video.id} video={video} ownerName={nameOf(video.ownerId)} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {videosQuery.data.items.map((video) => (
+                <VideoCard key={video.id} video={video} ownerName={nameOf(video.ownerId)} />
+              ))}
+            </div>
+            <Pagination page={page} totalPages={totalPages} onChange={goPage} className="pt-1" />
+          </>
         )}
       </section>
 
