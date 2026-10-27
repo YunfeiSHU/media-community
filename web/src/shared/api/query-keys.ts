@@ -4,6 +4,7 @@ import type { VideoListParams } from '@/entities/video/types';
 export const qk = {
   categories: ['categories'] as const,
   videos: (params: VideoListParams) => ['videos', params] as const,
+  infiniteVideos: (params: VideoListParams) => ['videos', 'infinite', params] as const,
   video: (id: string) => ['video', id] as const,
   play: (id: string) => ['video', id, 'play'] as const,
   liveRooms: ['live-rooms'] as const,

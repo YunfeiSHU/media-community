@@ -86,6 +86,8 @@ export default function VideoPage() {
     try {
       const next = await setFavorited(id, !interaction.favorited);
       queryClient.setQueryData(['video-interaction', id], next);
+      // 收藏/取消后让「我的收藏」重新拉取，避免下一页仍是旧列表
+      await queryClient.invalidateQueries({ queryKey: ['videos'] });
       if (next.favorited) setNotice('已收藏，可在「我的空间 · 收藏」里找到');
     } catch (error) {
       setNotice(describeError(error));

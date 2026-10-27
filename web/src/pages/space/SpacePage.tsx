@@ -1,6 +1,7 @@
+import { useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useProfiles } from '@/entities/user/queries';
-import { useVideos } from '@/entities/video/queries';
+import { useInfiniteVideos } from '@/entities/video/queries';
 import { useAuthStore } from '@/features/auth/store';
 import { CardGridSkeleton, EmptyState } from '@/widgets/empty-state/EmptyState';
 import { VideoCard } from '@/widgets/video-card/VideoCard';
@@ -13,21 +14,46 @@ type Tab = 'mine' | 'favorite';
  *
  * 两个 tab 共用同一条视频列表接口，区别只是 `?mine=true` 与 `?favorite=true`；
  * 收藏由后端按收藏时间倒序返回，前端不再排序。
+ * 列表按 12 条一页做无限滚动，底部保留「加载更多」按钮作为兜底。
  */
 export default function SpacePage() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get('tab') === 'favorite' ? 'favorite' : 'mine';
   const user = useAuthStore((state) => state.user);
 
-  const videosQuery = useVideos({
-    page: 1,
-    pageSize: 24,
+  const videosQuery = useInfiniteVideos({
+    pageSize: 12,
     mine: tab === 'mine',
     favorite: tab === 'favorite',
   });
 
-  const profilesQuery = useProfiles((videosQuery.data?.items ?? []).map((video) => video.ownerId));
-  const nameOf = (uid: string) => profilesQuery.data?.find((profile) => profile.uid === uid)?.nickname;
+  const videos = useMemo(
+    () => videosQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [videosQuery.data],
+  );
+  const total = videosQuery.data?.pages[0]?.total ?? 0;
+
+  const ownerIds = useMemo(() => videos.map((video) => video.ownerId), [videos]);
+  const profilesQuery = useProfiles(ownerIds);
+  const nameOf = (uid: string) =>
+    profilesQuery.data?.find((profile) => profile.uid === uid)?.nickname;
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = videosQuery;
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void fetchNextPage();
+      },
+      { rootMargin: '400px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   function switchTab(next: Tab) {
     setParams(next === 'mine' ? {} : { tab: next }, { replace: true });
@@ -65,26 +91,29 @@ export default function SpacePage() {
         </div>
       </section>
 
-      <div className="flex gap-2 border-b border-line">
-        {(
-          [
-            ['mine', '我的投稿'],
-            ['favorite', '我的收藏'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => switchTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2.5 text-body transition-colors ${
-              tab === key
-                ? 'border-brand font-medium text-brand'
-                : 'border-transparent text-ink-secondary hover:text-ink'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex items-end justify-between gap-3 border-b border-line">
+        <div className="flex gap-2">
+          {(
+            [
+              ['mine', '我的投稿'],
+              ['favorite', '我的收藏'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => switchTab(key)}
+              className={`-mb-px border-b-2 px-3 py-2.5 text-body transition-colors ${
+                tab === key
+                  ? 'border-brand font-medium text-brand'
+                  : 'border-transparent text-ink-secondary hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {total > 0 && <span className="pb-2 text-meta text-ink-tertiary">共 {total} 个</span>}
       </div>
 
       {videosQuery.isPending && <CardGridSkeleton count={8} />}
@@ -101,27 +130,40 @@ export default function SpacePage() {
         />
       )}
 
-      {videosQuery.isSuccess && videosQuery.data.items.length === 0 && (
+      {videosQuery.isSuccess && videos.length === 0 && (
         <EmptyState
           title={tab === 'mine' ? '还没有投稿' : '还没有收藏'}
           hint={tab === 'mine' ? '去投稿页上传第一个视频吧' : '在播放页点「收藏」就会出现在这里'}
           action={
-            <Link
-              to={tab === 'mine' ? '/upload' : '/'}
-              className="ui-btn-primary"
-            >
+            <Link to={tab === 'mine' ? '/upload' : '/'} className="ui-btn-primary">
               {tab === 'mine' ? '去投稿' : '去逛逛'}
             </Link>
           }
         />
       )}
 
-      {videosQuery.isSuccess && videosQuery.data.items.length > 0 && (
-        <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {videosQuery.data.items.map((video) => (
-            <VideoCard key={video.id} video={video} ownerName={nameOf(video.ownerId)} />
-          ))}
-        </div>
+      {videosQuery.isSuccess && videos.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {videos.map((video) => (
+              <VideoCard key={video.id} video={video} ownerName={nameOf(video.ownerId)} />
+            ))}
+          </div>
+
+          <div ref={loadMoreRef} className="flex flex-col items-center gap-2 py-2">
+            {isFetchingNextPage && <span className="text-meta text-ink-tertiary">加载更多…</span>}
+            {hasNextPage && !isFetchingNextPage && (
+              <button
+                type="button"
+                onClick={() => void fetchNextPage()}
+                className="ui-btn-ghost h-9 px-4 text-xs"
+              >
+                加载更多
+              </button>
+            )}
+            {!hasNextPage && <span className="text-meta text-ink-tertiary">没有更多了</span>}
+          </div>
+        </>
       )}
     </div>
   );
