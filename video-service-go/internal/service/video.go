@@ -96,6 +96,11 @@ func (s *VideoService) CreateVideo(ctx context.Context, u identity.CurrentUser, 
 		return nil, err
 	}
 
+	coverURL, err := NormalizeCoverURL(req.CoverURL)
+	if err != nil {
+		return nil, err
+	}
+
 	if req.CategoryID != nil {
 		if err := s.ensureCategoryExists(ctx, *req.CategoryID); err != nil {
 			return nil, err
@@ -107,6 +112,7 @@ func (s *VideoService) CreateVideo(ctx context.Context, u identity.CurrentUser, 
 		Description: description,
 		OwnerID:     u.UID,
 		CategoryID:  req.CategoryID,
+		CoverURL:    coverURL,
 		Status:      model.VideoStatusDraft,
 	}
 	if err := s.videos.Create(ctx, video); err != nil {
@@ -154,6 +160,14 @@ func (s *VideoService) UpdateVideo(ctx context.Context, u identity.CurrentUser, 
 			return nil, err
 		}
 		fields["category_id"] = *req.CategoryID
+	}
+
+	if req.CoverURL != nil {
+		coverURL, err := NormalizeCoverURL(*req.CoverURL)
+		if err != nil {
+			return nil, err
+		}
+		fields["cover_url"] = coverURL
 	}
 
 	if len(fields) > 0 {
@@ -389,6 +403,13 @@ func (s *VideoService) ListVideos(ctx context.Context, u identity.CurrentUser, q
 	}
 
 	switch {
+	case q.Favorite:
+		// 收藏列表只返回「当前登录用户」的收藏；没有 favoriteUid 这类参数，
+		// 因此无法借此查看别人的收藏。
+		if !u.Authenticated() {
+			return nil, 0, errs.CodeUnauthorized.Plain()
+		}
+		filter.FavoriteUID = u.UID
 	case q.Mine:
 		if !u.Authenticated() {
 			return nil, 0, errs.CodeUnauthorized.Plain()

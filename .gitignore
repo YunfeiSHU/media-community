@@ -44,3 +44,5 @@ coverage.out
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+deploy/runtime/

@@ -46,4 +46,15 @@ public enum UserRole {
         }
         return USER;
     }
+
+    /**
+     * 链路里的角色名：{@code ADMIN} / {@code user}。
+     *
+     * <p>必须与 auth-service 签发 JWT 时写入 {@code role} claim 的映射一致
+     * （见 {@code JwtTokenService#generateAccessToken}：code 0 → ADMIN，其余 → user），
+     * 也与网关写入的 {@code X-User-Role} 一致。前端用它做 UI 权限判断。
+     */
+    public String roleName() {
+        return this == ADMIN ? "ADMIN" : "user";
+    }
 }

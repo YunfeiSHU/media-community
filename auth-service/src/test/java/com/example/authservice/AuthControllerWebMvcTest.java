@@ -129,7 +129,21 @@ class AuthControllerWebMvcTest {
                 .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data").doesNotExist());
 
-        verify(authService).logout("Bearer access-token");
+        verify(authService).logout("Bearer access-token", null);
+    }
+
+    @Test
+    void logoutWithRefreshTokenAlsoDeletesSession() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header("Authorization", "Bearer access-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken": "uid.session.secret"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+
+        verify(authService).logout("Bearer access-token", "uid.session.secret");
     }
 
     @Test

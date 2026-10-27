@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/example/live-service-go/internal/config"
 )
@@ -62,8 +63,15 @@ func (u urls) PushURL(streamKey, sessionID string) string {
 }
 
 // PlayURLs 拼装四个协议的播放地址。
+//
+// 设置了 media.public_base 时，HLS / FLV 一律用它拼（同源反代场景），
+// 否则退回 http://rtmp_host:http_port（本地直连调试）。
+// 注意反代侧要剥掉 /live 前缀：/live/live/<key>.m3u8 -> SRS 的 /live/<key>.m3u8。
 func (u urls) PlayURLs(streamKey string) PlayURLs {
 	httpBase := fmt.Sprintf("http://%s:%d/%s", u.cfg.RTMPHost, u.cfg.HTTPPort, u.cfg.App)
+	if base := strings.TrimRight(u.cfg.PublicBase, "/"); base != "" {
+		httpBase = base + "/" + u.cfg.App
+	}
 	rtmpBase := fmt.Sprintf("rtmp://%s:%d/%s", u.cfg.RTMPHost, u.cfg.RTMPPort, u.cfg.App)
 	return PlayURLs{
 		HLS:     fmt.Sprintf("%s/%s.m3u8", httpBase, streamKey),

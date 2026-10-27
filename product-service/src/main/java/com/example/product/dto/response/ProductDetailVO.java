@@ -14,11 +14,17 @@ public record ProductDetailVO(ProductVO product, List<SkuVO> skus) {
 
     public static ProductDetailVO of(Product product, List<Sku> skus, Map<Long, Inventory> inventoryMap) {
         List<SkuVO> skuViews = new ArrayList<>(skus == null ? 0 : skus.size());
+        Long minPrice = null;
         if (skus != null) {
             for (Sku sku : skus) {
                 skuViews.add(SkuVO.from(sku, inventoryMap == null ? null : inventoryMap.get(sku.getId())));
+                // 详情页已经把所有 SKU 读出来了，就地算聚合，避免再发一次聚合查询
+                if (sku.getPrice() != null && (minPrice == null || sku.getPrice() < minPrice)) {
+                    minPrice = sku.getPrice();
+                }
             }
         }
-        return new ProductDetailVO(ProductVO.from(product), skuViews);
+        long skuCount = skus == null ? 0 : skus.size();
+        return new ProductDetailVO(ProductVO.from(product, minPrice, skuCount), skuViews);
     }
 }

@@ -90,16 +90,32 @@ public class AuthService {
     }
 
     /**
-     * 退出登录：拉黑当前 Access Token（按 jti 写入 Redis，TTL = token 剩余寿命）。
+     * 退出登录（兼容旧调用）：只拉黑 access token。
      *
-     * <p><b>注意：本方法不会失效 Refresh Token。</b>因为 Access Token 里只有 jti、没有 sessionId，
-     * 要“只失效当前设备”就需要维护 jti → sessionId 的反查索引；目前的取舍是登出仅提前作废当前 Access Token，
-     * 需要真正断开用户（全部设备）请用 {@link #forceLogout}。
+     * @deprecated 使用 {@link #logout(String, String)}，否则 Refresh Token 仍然有效
+     */
+    @Deprecated
+    public void logout(String authorization) {
+        logout(authorization, null);
+    }
+
+    /**
+     * 退出登录：拉黑当前 Access Token + 删除对应的 Refresh 会话。
+     *
+     * <p>业务上“退出登录”必须让长期凭证失效：Access Token 只有 30 分钟，
+     * 而 Refresh Token 有 7 天；只拉黑前者等于用户点了退出、别人捡到本地令牌还能续 7 天。
+     *
+     * <p>只删除<b>当前设备</b>的会话（refreshToken 自带 sessionId），
+     * 其他设备的登录态不受影响；要踢掉全部设备用 {@link #forceLogout}。
      *
      * @param authorization 形如 {@code Bearer <token>}
+     * @param refreshToken  可选；为空时退化为只拉黑 access token
      */
-    public void logout(String authorization) {
+    public void logout(String authorization, String refreshToken) {
         jwtBlacklistService.blacklist(authorization);
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            sessionService.deleteQuietly(refreshToken);
+        }
     }
 
     /**

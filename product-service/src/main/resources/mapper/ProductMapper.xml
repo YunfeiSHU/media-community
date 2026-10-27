@@ -26,6 +26,34 @@
         WHERE product_id = #{productId}
     </select>
 
+    <sql id="List_Where">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="uid != null and uid != ''">
+                AND uid = #{uid}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="Product">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM product
+        <include refid="List_Where"/>
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*) FROM product
+        <include refid="List_Where"/>
+    </select>
+
     <update id="update" parameterType="Product">
         UPDATE product
         <set>

@@ -42,7 +42,8 @@ services:
       - --default-time-zone=+08:00
       - --max_connections=500
     ports:
-      - "${MYSQL_HOST_PORT:-3307}:3306"
+      # 基础设施一律只绑回环：只有网关 / Nginx 需要访问它们，不该暴露到公网
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./db/go:/docker-entrypoint-initdb.d:ro
@@ -66,7 +67,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_HOST_PORT:-6380}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -88,8 +89,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
     ports:
-      - "${RABBITMQ_HOST_PORT:-5672}:5672"           # AMQP
-      - "${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"    # 管理台 http://localhost:15672
+      - "127.0.0.1:${RABBITMQ_HOST_PORT:-5672}:5672"           # AMQP
+      - "127.0.0.1:${RABBITMQ_MGMT_HOST_PORT:-15672}:15672"    # 管理台（仅本机）
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -112,8 +113,9 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "${MINIO_HOST_PORT:-9000}:9000"              # S3 API
-      - "${MINIO_CONSOLE_HOST_PORT:-9090}:9090"      # 控制台 http://localhost:9090
+      # 浏览器不直连 MinIO：媒体统一走 Nginx /media 反代，所以只绑回环
+      - "127.0.0.1:${MINIO_HOST_PORT:-9000}:9000"              # S3 API
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-9090}:9090"      # 控制台（仅本机）
     volumes:
       - minio-data:/data
     # 刻意不写 healthcheck：minio 镜像是精简的 UBI，不带 curl，
@@ -163,8 +165,8 @@ services:
       JVM_XMS: 256m
       JVM_XMX: 512m
     ports:
-      - "${NACOS_HOST_PORT:-8848}:8848"                # 控制台 / OpenAPI
-      - "${NACOS_GRPC_HOST_PORT:-9848}:9848"           # gRPC（Nacos 2.x 客户端必需）
+      - "127.0.0.1:${NACOS_HOST_PORT:-8848}:8848"                # 控制台 / OpenAPI
+      - "127.0.0.1:${NACOS_GRPC_HOST_PORT:-9848}:9848"           # gRPC（Nacos 2.x 客户端必需）
     volumes:
       - nacos-data:/home/nacos/data
     healthcheck:

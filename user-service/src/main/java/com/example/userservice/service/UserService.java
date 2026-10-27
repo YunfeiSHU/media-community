@@ -90,6 +90,30 @@ public class UserService {
         return uids.isEmpty() ? List.of() : userRepository.findByUids(uids);
     }
 
+    /**
+     * 公开资料：只有状态为 {@code NORMAL} 的用户可见。
+     *
+     * <p>不存在、已删除、被冻结/禁用都返回同一个 404，调用方无法据此判断账号状态。
+     */
+    public User getPublicRequiredByUid(String uid) {
+        User user = userRepository.findByUid(uid);
+        if (user == null || user.getStatusEnum() != UserStatus.NORMAL) {
+            // 文案不带 uid 以外的信息，避免泄露“该账号存在但被禁用”
+            throw new BizException(ErrorCode.USER_NOT_FOUND, "profile not found: " + uid);
+        }
+        return user;
+    }
+
+    /** 批量公开资料：未知或非 NORMAL 的 uid 直接省略，不抛异常。 */
+    public List<User> getPublicByUids(List<String> uids) {
+        if (uids.isEmpty()) {
+            return List.of();
+        }
+        return userRepository.findByUids(uids).stream()
+                .filter(user -> user.getStatusEnum() == UserStatus.NORMAL)
+                .toList();
+    }
+
     @Transactional
     public User updateProfile(Long userId, UserUpdateRequest request) {
         User user = getRequired(userId);

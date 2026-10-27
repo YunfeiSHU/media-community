@@ -19,6 +19,7 @@ import com.example.order.support.OrderLookup;
 import com.example.order.support.PaymentRecordWriter;
 import com.example.order.support.PaymentSigner;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -158,6 +159,51 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRecordWriter.append(request, CallbackStatus.SUCCESS);
         log.info("支付回调处理完成: paymentId={}, orderId={}, transactionId={}",
                 request.paymentId(), payment.getOrderId(), request.transactionId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PaymentVO mockPay(String uid, String orderId) {
+        String currentUid = requireUid(uid);
+        Order order = orderLookup.requireMine(orderId, currentUid);
+
+        if (!OrderStatus.WAIT_PAY.is(order.getStatus())) {
+            // 已支付/已完成时给出可读文案，前端据 409 刷新订单即可
+            throw new BizException(ErrorCode.ORDER_STATUS_CONFLICT,
+                    "订单当前状态不可支付: " + OrderStatus.of(order.getStatus()).getDescription());
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (order.getExpireAt() != null && !order.getExpireAt().isAfter(now)) {
+            throw new BizException(ErrorCode.ORDER_EXPIRED, "订单已超时，请重新下单");
+        }
+
+        // 与 createPayment 同样的复用逻辑：没有待支付支付单就现场建一张
+        PaymentOrder payment = paymentOrderMapper.selectWaitPayByOrderId(order.getOrderId());
+        if (payment == null) {
+            payment = new PaymentOrder();
+            payment.setPaymentId(IdGenerator.nextPaymentId());
+            payment.setOrderId(order.getOrderId());
+            payment.setUid(currentUid);
+            payment.setAmount(order.getTotalAmount());
+            payment.setStatus(PaymentStatus.WAIT_PAY.getCode());
+            // 模拟支付固定记为「余额支付」
+            payment.setPaymentChannel(PaymentChannel.BALANCE.getCode());
+            payment.setExpireAt(order.getExpireAt());
+            paymentOrderMapper.insert(payment);
+        }
+
+        String transactionId = "MOCK-" + UUID.randomUUID().toString().replace("-", "");
+        LocalDateTime paidAt = LocalDateTime.now();
+        if (paymentOrderMapper.markPaid(payment.getPaymentId(), transactionId, paidAt) == 0) {
+            // 并发：另一个请求已经把它置为已支付，直接返回最新状态
+            log.warn("并发 mock 支付，支付单已变更: paymentId={}", payment.getPaymentId());
+            return PaymentVO.from(paymentOrderMapper.selectByPaymentId(payment.getPaymentId()));
+        }
+
+        orderService.markPaid(payment.getOrderId(), paidAt);
+        log.info("mock 支付完成: paymentId={}, orderId={}, uid={}, amount={}",
+                payment.getPaymentId(), order.getOrderId(), currentUid, payment.getAmount());
+        return PaymentVO.from(paymentOrderMapper.selectByPaymentId(payment.getPaymentId()));
     }
 
     private String requireUid(String uid) {

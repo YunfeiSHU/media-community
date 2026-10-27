@@ -27,6 +27,25 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-gateway
     restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+      auth-service:
+        condition: service_started
+        required: false
+      user-service:
+        condition: service_started
+        required: false
+      product-service:
+        condition: service_started
+        required: false
+      order-service:
+        condition: service_started
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -44,8 +63,11 @@ services:
       VIDEO_SERVICE_URI: ${VIDEO_SERVICE_URI:-http://video-service:9001}
       LIVE_SERVICE_URI: ${LIVE_SERVICE_URI:-http://live-service:9002}
       DANMAKU_SERVICE_URI: ${DANMAKU_SERVICE_URI:-http://danmaku-service:9003}
+      # 必须与 auth-service 用同一把；默认值只适合本地演示，生产在 .env.production 覆盖
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-please-change-in-production-0123456789}
     ports:
-      - "8000:8000"
+      # 网关只绑回环：公网入口是宿主机 Nginx 的 443，Nginx 再反代到 127.0.0.1:8000
+      - "127.0.0.1:8000:8000"
 
   # ---------------------------------------------------------- auth-service
   auth-service:
@@ -55,6 +77,19 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-auth
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+      user-service:
+        condition: service_started
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -70,8 +105,12 @@ services:
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
       DUBBO_REGISTRY_ADDRESS: "nacos://${INFRA_NACOS_ADDR:-host.docker.internal:8848}"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-please-change-in-production-0123456789}
+      # 生产必须 false（验证码不能回显给调用方）
+      AUTH_VERIFICATION_EXPOSE_CODE: ${AUTH_VERIFICATION_EXPOSE_CODE:-true}
     ports:
-      - "8002:8002"
+      # 下游服务一律只绑回环：直连端口一旦对外，X-User-Id 就能被任意伪造
+      - "127.0.0.1:8002:8002"
 
   # ---------------------------------------------------------- user-service
   user-service:
@@ -81,6 +120,13 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-user
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -95,7 +141,7 @@ services:
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
 
   # ------------------------------------------------------- product-service
   product-service:
@@ -105,6 +151,13 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-product
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -118,9 +171,9 @@ services:
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
       # Dubbo 服务端口：order-service 直连它（见下面是 PRODUCT_RPC_URL）
-      - "20880:20880"
+      - "127.0.0.1:20880:20880"
 
   # --------------------------------------------------------- order-service
   order-service:
@@ -130,6 +183,16 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-order
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      nacos:
+        condition: service_healthy
+        required: false
+      product-service:
+        condition: service_started
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -140,8 +203,10 @@ services:
       # 单机直连：product-service 的 Dubbo 端口用服务名解析（不用注册中心）
       PRODUCT_RPC_URL: "dubbo://product-service:20880"
       PAYMENT_CALLBACK_SECRET: ${PAYMENT_CALLBACK_SECRET:-order-service-callback-secret}
+      # 生产必须 false：否则任何人都能调用 mock-pay 把订单改成已支付
+      MOCK_PAY_ENABLED: ${MOCK_PAY_ENABLED:-true}
       NACOS_SERVER_ADDR: ${INFRA_NACOS_ADDR:-host.docker.internal:8848}
       NACOS_USERNAME: nacos
       NACOS_PASSWORD: nacos
     ports:
-      - "8004:8004"
+      - "127.0.0.1:8004:8004"

@@ -3,6 +3,7 @@ package com.example.gatewayservice.filter;
 import java.nio.charset.StandardCharsets;
 import java.net.URI;
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -63,10 +64,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String path = request.getURI().getPath();
         String method = request.getMethod() != null ? request.getMethod().name() : "";
 
-        if (isPermitAll(path, method)) {
+        boolean forceAuth = matchesAny(gatewayAuthProperties.getForceAuth(), path, method);
+        if (!forceAuth && isPermitAll(path, method)) {
             // 白名单放行前同样清洗身份头，避免客户端伪造 uid / X-User-Id / X-User-Role 直通下游
             return chain.filter(stripIdentityHeaders(exchange));
         }
+
+        // 可选登录：没有令牌也放行，但下游只能看到“游客”；令牌非法时仍按 401 处理。
+        boolean optionalAuthPath = matchesAny(gatewayAuthProperties.getOptionalAuth(), path, method);
 
         String token = extractBearerToken(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION));
         boolean tokenFromQuery = false;
@@ -75,6 +80,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             tokenFromQuery = StringUtils.hasText(token);
         }
         if (!StringUtils.hasText(token)) {
+            if (optionalAuthPath) {
+                return chain.filter(stripIdentityHeaders(exchange));
+            }
             return unauthorized(exchange, "Missing JWT token");
         }
 
@@ -169,7 +177,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * 表示只有 GET 方法免鉴权；不带方法前缀时对任意方法放行。
      */
     private boolean isPermitAll(String path, String method) {
-        for (String rule : gatewayAuthProperties.getPermitAll()) {
+        return matchesAny(gatewayAuthProperties.getPermitAll(), path, method);
+    }
+
+    /**
+     * 判断请求是否命中「可选登录」列表。
+     *
+     * <p>命中只改变“无令牌时是否放行”，令牌存在时仍走完整校验，不能用来绕过鉴权。
+     */
+    private boolean matchesAny(List<String> rules, String path, String method) {
+        for (String rule : rules) {
             if (!StringUtils.hasText(rule)) {
                 continue;
             }

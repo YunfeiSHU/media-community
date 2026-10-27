@@ -30,7 +30,9 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 FROM alpine:3.20
 
 # tzdata 是必需的：DSN 带 loc=Local，缺时区库会让时间按 UTC 落库
-RUN apk add --no-cache ca-certificates tzdata \
+# ffmpeg 也是必需的：VIDEO_TRANSCODER_DRIVER=real 时要调用它转码；
+# 不装的话容器里只有 mock 可用，真实上传会一直卡在转码失败。
+RUN apk add --no-cache ca-certificates tzdata ffmpeg \
     && adduser -D -u 10001 app
 
 ENV TZ=Asia/Shanghai

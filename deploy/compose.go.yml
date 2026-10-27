@@ -26,9 +26,9 @@ services:
       # 所以容器内必须有 host.docker.internal 这个名字
       - "host.docker.internal:host-gateway"
     ports:
-      - "${SRS_RTMP_HOST_PORT:-1936}:1935"            # RTMP 推流
-      - "${SRS_HTTP_HOST_PORT:-8088}:8080"            # HTTP-FLV / HLS
-      - "${SRS_API_HOST_PORT:-1986}:1985"             # SRS HTTP API
+      - "${SRS_RTMP_HOST_PORT:-1936}:1935"            # RTMP 推流（主播 OBS 直连，必须对外）
+      - "127.0.0.1:${SRS_HTTP_HOST_PORT:-8088}:8080"  # HTTP-FLV / HLS（由 Nginx /live 反代）
+      - "127.0.0.1:${SRS_API_HOST_PORT:-1986}:1985"   # SRS HTTP API（仅本机调试）
       - "${SRS_WEBRTC_HOST_PORT:-8001}:8000/udp"      # WebRTC
       - "${SRS_WEBRTC_HOST_PORT:-8001}:8000/tcp"
     volumes:
@@ -42,6 +42,18 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-video
     restart: unless-stopped
+    # required:false 让「中间件跑在宿主机、不启用 infra profile」的模式也能启动；
+    # 启用 infra profile 时会等健康检查通过再起业务容器。
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -54,13 +66,18 @@ services:
       VIDEO_RABBITMQ_URL: "amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-admin}@${INFRA_RABBITMQ_HOST:-host.docker.internal}:${INFRA_RABBITMQ_PORT:-5672}/${RABBITMQ_VHOST:-/}"
       # endpoint 是服务端地址（容器视角），public_endpoint 是回给浏览器的地址（宿主机视角）
       VIDEO_MINIO_ENDPOINT: ${INFRA_MINIO_ENDPOINT:-host.docker.internal:9000}
-      VIDEO_MINIO_PUBLIC_ENDPOINT: "http://${PUBLIC_HOST:-localhost}:${MINIO_HOST_PORT:-9000}"
+      # 同源反代时建议直接覆盖成 https://your.site/media（Nginx 会剥掉 /media 前缀），
+      # 这样页面在 HTTPS 下也不会出现混合内容；默认值只适合本地直连调试。
+      VIDEO_MINIO_PUBLIC_ENDPOINT: "${PUBLIC_SCHEME:-http}://${PUBLIC_HOST:-localhost}:${MINIO_HOST_PORT:-9000}"
       VIDEO_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       VIDEO_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       VIDEO_MINIO_BUCKET: ${MEDIA_BUCKET:-media}
       VIDEO_TRANSCODER_DRIVER: ${VIDEO_TRANSCODER_DRIVER:-mock}
+      # 生产挂持久卷（compose 未挂时退化为容器内临时目录，重启丢中间文件）
+      VIDEO_WORK_DIR: ${VIDEO_WORK_DIR:-/tmp/transcode}
     ports:
-      - "9001:9001"
+      # Go 服务只绑回环：身份靠网关注入的 X-User-Id，端口对外等于可被冒充
+      - "127.0.0.1:9001:9001"
 
   # ---------------------------------------------------------- live-service
   live-service:
@@ -69,6 +86,19 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-live
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      srs:
+        condition: service_started
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -87,8 +117,11 @@ services:
       # 这个是**服务端自己**调 SRS HTTP API 用的地址，所以走服务名/宿主内网
       LIVE_SRS_API_BASE: ${INFRA_SRS_API_BASE:-http://host.docker.internal:1985}
       LIVE_SRS_APP: ${LIVE_SRS_APP:-live}
+      # 回给浏览器的播放地址前缀；同源反代设为 https://your.site/live，
+      # 留空则退回 http://${PUBLIC_HOST}:8088（本地直连调试）
+      LIVE_PUBLIC_BASE: ${LIVE_PUBLIC_BASE:-}
     ports:
-      - "9002:9002"
+      - "127.0.0.1:9002:9002"
 
   # ------------------------------------------------------- danmaku-service
   danmaku-service:
@@ -97,6 +130,16 @@ services:
       dockerfile: Dockerfile
     container_name: gomedia-danmaku
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      rabbitmq:
+        condition: service_healthy
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -108,4 +151,4 @@ services:
       # WebSocket 跨域白名单；容器内跑通常前端在宿主机，放开即可
       DANMAKU_WS_ORIGINS: ${DANMAKU_WS_ORIGINS:-*}
     ports:
-      - "9003:9003"
+      - "127.0.0.1:9003:9003"

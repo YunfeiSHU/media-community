@@ -115,6 +115,24 @@ public class SessionService {
     }
 
     /**
+     * 删除某个 Refresh Token 对应的会话（登出用）。
+     *
+     * <p>与 {@link #rotate} 的区别：这里**不校验哈希**，直接按 refreshToken 里的
+     * {@code uid.sessionId} 定位并删除。风险可控——攻击者要删除会话必须先拿到
+     * 完整 Refresh Token，而拿到它本身就已经能调用 {@code rotate} 换新令牌。
+     *
+     * <p>格式非法时静默返回：登出是幂等操作，不该因为客户端传了坏令牌而报错。
+     */
+    public void deleteQuietly(String refreshToken) {
+        try {
+            String[] parts = parse(refreshToken);
+            redisTemplate.delete(sessionKey(parts[0], parts[1]));
+        } catch (BizException ignored) {
+            // 无效 / 过期 / 已被轮换的令牌：没有可删除的会话，视为已登出
+        }
+    }
+
+    /**
      * 删除某个用户的所有会话（强制下线）。
      *
      * <p>用 SCAN 而**不是** KEYS：KEYS 是 O(N) 全库扫描、会阻塞 Redis 主线程，

@@ -12,6 +12,7 @@ import com.example.authservice.common.CurrentUser;
 import com.example.authservice.dto.EmailRegisterRequest;
 import com.example.authservice.dto.LoginRequest;
 import com.example.authservice.dto.LoginResponse;
+import com.example.authservice.dto.LogoutRequest;
 import com.example.authservice.dto.PhoneRegisterRequest;
 import com.example.authservice.dto.RefreshTokenRequest;
 import com.example.authservice.dto.SendVerificationRequest;
@@ -56,9 +57,16 @@ public class AuthController {
         return ApiResponse.success(authService.refresh(request));
     }
 
+    /**
+     * 退出登录。
+     *
+     * <p>请求体可选：带 {@code refreshToken} 时同时删除该会话，
+     * 否则只拉黑当前 access token（旧行为）。
+     */
     @PostMapping("/logout")
-    public ApiResponse<Void> logout(@RequestHeader("Authorization") String authorization) {
-        authService.logout(authorization);
+    public ApiResponse<Void> logout(@RequestHeader("Authorization") String authorization,
+                                    @RequestBody(required = false) LogoutRequest body) {
+        authService.logout(authorization, body == null ? null : body.refreshToken());
         return ApiResponse.success();
     }
 

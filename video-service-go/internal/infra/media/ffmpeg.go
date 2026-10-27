@@ -38,6 +38,11 @@ func (t *FFmpegTranscoder) Transcode(ctx context.Context, req Request, progress 
 	}
 
 	workDir := filepath.Join(t.cfg.WorkDir, fmt.Sprintf("video-%d", req.VideoID))
+	// 必须是绝对路径：runProfile 会把 ffmpeg 的 cmd.Dir 设成 outDir，
+	// 若 src 是相对路径（默认 work_dir=./.work），切目录后就找不到输入文件了。
+	if abs, absErr := filepath.Abs(workDir); absErr == nil {
+		workDir = abs
+	}
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建转码工作目录失败: %w", err)
 	}

@@ -20,6 +20,29 @@ public class GatewayAuthProperties {
      */
     private List<String> permitAll = new ArrayList<>();
 
+    /**
+     * 「可选登录」路径，Ant 风格，写法与 {@link #permitAll} 相同（可带 METHOD 前缀）。
+     *
+     * <p>语义介于「强制 JWT」与「匿名」之间：
+     * <ul>
+     *     <li>带令牌：照常校验签名 / 签发方 / 受众 / 过期 / 黑名单，通过后注入身份头；</li>
+     *     <li>不带令牌：放行，但**剥离**客户端伪造的身份头，下游按游客处理；</li>
+     *     <li>令牌非法：仍返回 401（不能把“坏令牌”静默降级成游客，否则过期令牌会掩盖问题）。</li>
+     * </ul>
+     *
+     * <p>典型场景：`GET /videos?mine=true`、`?favorite=true`、批量点赞状态——
+     * 游客能访问同一路径，登录后需要额外返回“我的”数据。
+     */
+    private List<String> optionalAuth = new ArrayList<>();
+
+    /**
+     * 强制认证路径：即使命中 {@link #permitAll} 也要求携带有效 JWT。
+     *
+     * <p>用于 Ant 通配无法排除的情况，例如 {@code GET /api/v1/products/*} 会命中
+     * {@code GET /api/v1/products/mine}，但后者必须带身份。
+     */
+    private List<String> forceAuth = new ArrayList<>();
+
     private Jwt jwt = new Jwt();
 
     public List<String> getPermitAll() {
@@ -28,6 +51,22 @@ public class GatewayAuthProperties {
 
     public void setPermitAll(List<String> permitAll) {
         this.permitAll = permitAll;
+    }
+
+    public List<String> getOptionalAuth() {
+        return optionalAuth;
+    }
+
+    public void setOptionalAuth(List<String> optionalAuth) {
+        this.optionalAuth = optionalAuth;
+    }
+
+    public List<String> getForceAuth() {
+        return forceAuth;
+    }
+
+    public void setForceAuth(List<String> forceAuth) {
+        this.forceAuth = forceAuth;
     }
 
     public Jwt getJwt() {

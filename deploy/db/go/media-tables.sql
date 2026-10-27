@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS `media_video` (
   `size_bytes`    BIGINT        NOT NULL DEFAULT 0,
   `status`        VARCHAR(16)   NOT NULL DEFAULT 'DRAFT',
   `view_count`    BIGINT        NOT NULL DEFAULT 0,
+  `like_count`     BIGINT        NOT NULL DEFAULT 0,
+  `favorite_count` BIGINT        NOT NULL DEFAULT 0,
   `published_at`  DATETIME(3)   NULL,
   `created_at`    DATETIME(3)   NULL,
   `updated_at`    DATETIME(3)   NULL,
@@ -212,3 +214,26 @@ CREATE TABLE IF NOT EXISTS `media_sensitive_word` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_word` (`word`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='弹幕敏感词';
+
+-- ---------------------------------------------------------------- S4 互动
+-- 点赞 / 收藏关系。唯一键让「重复点击」在数据库层天然幂等：
+-- 插入冲突时忽略，RowsAffected=0，计数不会被重复累加。
+CREATE TABLE IF NOT EXISTS `media_video_like` (
+  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `video_id`   BIGINT UNSIGNED NOT NULL,
+  `uid`        VARCHAR(64)     NOT NULL,
+  `created_at` DATETIME(3)     NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_like_video_uid` (`video_id`, `uid`),
+  KEY `idx_like_uid_created` (`uid`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='视频点赞';
+
+CREATE TABLE IF NOT EXISTS `media_video_favorite` (
+  `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `video_id`   BIGINT UNSIGNED NOT NULL,
+  `uid`        VARCHAR(64)     NOT NULL,
+  `created_at` DATETIME(3)     NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_favorite_video_uid` (`video_id`, `uid`),
+  KEY `idx_favorite_uid_created` (`uid`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='视频收藏';

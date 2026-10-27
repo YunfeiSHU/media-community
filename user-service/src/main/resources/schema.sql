@@ -15,3 +15,14 @@ CREATE TABLE IF NOT EXISTS `user` (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
+
+-- 关注关系（S4）。唯一键让「重复关注」天然幂等。
+-- 计数不落库：demo 规模下 COUNT(*) 足够，省掉一个容易与关系表不一致的冗余字段。
+CREATE TABLE IF NOT EXISTS `user_follow` (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    follower_uid VARCHAR(32) NOT NULL,
+    followee_uid VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    UNIQUE KEY uk_follower_followee (follower_uid, followee_uid),
+    KEY idx_followee_created (followee_uid, created_at)
+);

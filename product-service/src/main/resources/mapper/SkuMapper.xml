@@ -75,4 +75,18 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 列表页聚合：一次查完一页商品的最低价与 SKU 数，避免 N+1 -->
+    <select id="selectStatsByProductIds" resultType="com.example.product.dto.response.ProductSkuStat">
+        SELECT product_id AS productId,
+               MIN(price) AS minPrice,
+               COUNT(*)   AS skuCount
+        FROM sku
+        WHERE status &lt;&gt; 2
+          AND product_id IN
+        <foreach collection="productIds" item="pid" open="(" separator="," close=")">
+            #{pid}
+        </foreach>
+        GROUP BY product_id
+    </select>
+
 </mapper>

@@ -2,10 +2,13 @@ package com.example.product.controller;
 
 import com.example.product.common.ApiResponse;
 import com.example.product.common.CurrentUser;
+import com.example.product.common.PageResult;
+import com.example.product.domain.enums.ProductStatus;
 import com.example.product.dto.request.CreateProductRequest;
 import com.example.product.dto.request.CreateSkuRequest;
 import com.example.product.dto.request.UpdateProductRequest;
 import com.example.product.dto.response.ProductDetailVO;
+import com.example.product.dto.response.ProductVO;
 import com.example.product.dto.response.SkuVO;
 import com.example.product.service.ProductService;
 import com.example.product.service.SkuService;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -47,10 +51,42 @@ public class ProductController {
         return ApiResponse.success(productService.createProduct(CurrentUser.uid(httpRequest), request));
     }
 
+    /**
+     * 我的商品 GET /api/v1/products/mine（必须登录）
+     *
+     * <p>包含草稿/下架，供「商品管理」页使用。网关对该路径配置了 force-auth，
+     * 即使命中了公开的 `GET /api/v1/products/*` 也会强制校验 JWT。
+     */
+    @GetMapping("/mine")
+    public ApiResponse<PageResult<ProductVO>> listMyProducts(
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "pageSize", defaultValue = "50") int pageSize,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.success(
+                productService.listMyProducts(CurrentUser.uid(httpRequest), page, pageSize));
+    }
+
     /** 商品详情 GET /api/v1/products/{id} */
     @GetMapping("/{id}")
     public ApiResponse<ProductDetailVO> getProduct(@PathVariable("id") String id) {
         return ApiResponse.success(productService.getProduct(id));
+    }
+
+    /**
+     * 商品列表 GET /api/v1/products?page&pageSize&keyword&status
+     *
+     * <p>公开接口只返回**上架**商品；该路径在网关白名单里，身份头会被剥离，
+     * 因此这里无法判断调用者是否管理员——后台看全量请走独立的管理端接口，不要放宽这里。
+     */
+    @GetMapping
+    public ApiResponse<PageResult<ProductVO>> listProducts(
+            @RequestParam(name = "keyword", required = false) String keyword,
+            @RequestParam(name = "status", required = false) Integer status,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "pageSize", defaultValue = "12") int pageSize) {
+        // status 参数保留在契约里，但公开列表一律按「上架」过滤
+        Integer effectiveStatus = ProductStatus.ON_SHELF.getCode();
+        return ApiResponse.success(productService.listProducts(keyword, effectiveStatus, page, pageSize));
     }
 
     /** 修改商品 PUT /api/v1/products/{id}（仅创建者） */

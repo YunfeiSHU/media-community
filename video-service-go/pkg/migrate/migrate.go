@@ -24,11 +24,13 @@ func AutoMigrate(db *gorm.DB, log *slog.Logger) error {
 		&model.VideoTag{},
 		&model.TranscodeTask{},
 		&model.UploadSession{},
+		&model.VideoLike{},
+		&model.VideoFavorite{},
 	}
 	if err := db.AutoMigrate(tables...); err != nil {
 		return fmt.Errorf("自动建表失败: %w", err)
 	}
-	log.Info("db_migrated", "tables", []string{"media_video", "media_video_category", "media_video_tag", "media_transcode_task", "media_upload_session"})
+	log.Info("db_migrated", "tables", []string{"media_video", "media_video_category", "media_video_tag", "media_transcode_task", "media_upload_session", "media_video_like", "media_video_favorite"})
 	return nil
 }
 

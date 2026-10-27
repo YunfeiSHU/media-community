@@ -79,6 +79,14 @@ func parseListQuery(c *gin.Context) (dto.ListQuery, error) {
 		q.Mine = value
 	}
 
+	if raw := c.Query("favorite"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return q, errs.CodeInvalidParam.New("favorite 必须是布尔值")
+		}
+		q.Favorite = value
+	}
+
 	return q, nil
 }
 

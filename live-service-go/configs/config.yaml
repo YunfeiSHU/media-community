@@ -52,6 +52,9 @@ media:
   webrtc_port: ${LIVE_SRS_WEBRTC_PORT:-8001}
   api_base: "${LIVE_SRS_API_BASE:-http://127.0.0.1:1986}"  # SRS HTTP API（force-close 断流）
   app: "${LIVE_SRS_APP:-live}"                  # 必须与 deploy/media/srs.conf 的 app 一致
+  # 回给浏览器的播放地址前缀；同源反代时设成 https://your.site/live，
+  # 为空则退回 http://rtmp_host:http_port（仅本地直连调试可用）
+  public_base: "${LIVE_PUBLIC_BASE:-}"
   hook_secret: "${LIVE_SRS_HOOK_SECRET:-}"       # 可选：回调共享密钥
 
 room:

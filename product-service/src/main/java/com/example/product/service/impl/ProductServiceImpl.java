@@ -4,6 +4,7 @@ import com.example.product.common.BizException;
 import com.example.product.common.CurrentUser;
 import com.example.product.common.ErrorCode;
 import com.example.product.common.IdGenerator;
+import com.example.product.common.PageResult;
 import com.example.product.domain.entity.Inventory;
 import com.example.product.domain.entity.Product;
 import com.example.product.domain.entity.Sku;
@@ -13,6 +14,8 @@ import com.example.product.domain.enums.SkuStatus;
 import com.example.product.dto.request.CreateProductRequest;
 import com.example.product.dto.request.UpdateProductRequest;
 import com.example.product.dto.response.ProductDetailVO;
+import com.example.product.dto.response.ProductSkuStat;
+import com.example.product.dto.response.ProductVO;
 import com.example.product.mapper.InventoryMapper;
 import com.example.product.mapper.ProductMapper;
 import com.example.product.mapper.SkuMapper;
@@ -31,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
+
+    /** 列表分页上限：与《契约约定》一致，超出直接 40001，不静默截断 */
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ProductMapper productMapper;
 
@@ -68,6 +74,50 @@ public class ProductServiceImpl implements ProductService {
         Product product = entityLookup.requireProduct(id);
         log.debug("查询商品详情: id={}, productId={}", id, product.getProductId());
         return loadDetail(product);
+    }
+
+    @Override
+    public PageResult<ProductVO> listProducts(String keyword, Integer status, int page, int pageSize) {
+        return listInternal(keyword, status, null, page, pageSize);
+    }
+
+    @Override
+    public PageResult<ProductVO> listMyProducts(String uid, int page, int pageSize) {
+        if (uid == null || uid.isBlank()) {
+            throw new BizException(ErrorCode.UNAUTHORIZED, "缺少登录用户");
+        }
+        return listInternal(null, null, uid, page, pageSize);
+    }
+
+    private PageResult<ProductVO> listInternal(String keyword, Integer status, String uid, int page, int pageSize) {
+        if (page < 1) {
+            throw new BizException(ErrorCode.INVALID_PARAM, "page 必须从 1 开始");
+        }
+        if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+            throw new BizException(ErrorCode.INVALID_PARAM, "pageSize 必须在 1~" + MAX_PAGE_SIZE + " 之间");
+        }
+
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        long total = productMapper.countPage(normalizedKeyword, status, uid);
+        if (total == 0) {
+            return PageResult.empty(page, pageSize);
+        }
+
+        List<Product> products = productMapper.selectPage(
+                normalizedKeyword, status, uid, (page - 1) * pageSize, pageSize);
+        if (products.isEmpty()) {
+            return PageResult.of(List.of(), total, page, pageSize);
+        }
+
+        // 一页商品一次聚合，避免逐个商品查 SKU（N+1）
+        List<Long> ids = products.stream().map(Product::getId).toList();
+        Map<Long, ProductSkuStat> stats = skuMapper.selectStatsByProductIds(ids).stream()
+                .collect(Collectors.toMap(ProductSkuStat::getProductId, Function.identity()));
+
+        List<ProductVO> items = products.stream()
+                .map(product -> ProductVO.from(product, stats.get(product.getId())))
+                .toList();
+        return PageResult.of(items, total, page, pageSize);
     }
 
     @Override

@@ -16,8 +16,10 @@ type VideoFilter struct {
 	OwnerID       string
 	Status        string
 	OnlyPublished bool // 游客 / 普通用户强制只看已发布
-	Offset        int
-	Limit         int
+	// FavoriteUID 非空时只返回该用户的收藏，并按收藏时间倒序
+	FavoriteUID string
+	Offset      int
+	Limit       int
 }
 
 // VideoRepository 是视频与标签的数据访问接口。
@@ -94,6 +96,11 @@ func (r *videoRepository) List(ctx context.Context, f VideoFilter) ([]model.Vide
 		q = q.Where("status = ?", model.VideoStatusPublished)
 	}
 
+	if f.FavoriteUID != "" {
+		// 收藏列表按「收藏时间」倒序，而不是视频发布时间
+		q = q.Joins("JOIN media_video_favorite fav ON fav.video_id = media_video.id AND fav.uid = ?", f.FavoriteUID)
+	}
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -102,8 +109,13 @@ func (r *videoRepository) List(ctx context.Context, f VideoFilter) ([]model.Vide
 		return nil, 0, nil
 	}
 
+	order := "media_video.created_at DESC, media_video.id DESC"
+	if f.FavoriteUID != "" {
+		order = "fav.created_at DESC, media_video.id DESC"
+	}
+
 	var items []model.Video
-	err := q.Order("created_at DESC, id DESC").
+	err := q.Order(order).
 		Offset(f.Offset).Limit(f.Limit).
 		Find(&items).Error
 	if err != nil {

@@ -59,6 +59,7 @@ class GatewayGoRoutingTests {
 
         // 从真实的 application.yml 读取网关鉴权配置，避免测试与生产配置漂移
         gatewayAuthProperties.setPermitAll(loadList("gateway.auth.permit-all"));
+        gatewayAuthProperties.setOptionalAuth(loadList("gateway.auth.optional-auth"));
         gatewayAuthProperties.getJwt().setTokenQueryPaths(loadList("gateway.auth.jwt.token-query-paths"));
 
         filter = new JwtAuthenticationFilter(gatewayAuthProperties, mock(RedisBlacklistService.class));
@@ -160,9 +161,7 @@ class GatewayGoRoutingTests {
             "DELETE, /api/v1/danmaku/dm-1",
             "POST,   /api/v1/danmaku/admin/reload-words",
             "GET,    /api/v1/danmaku/admin/words",
-            "POST,   /api/v1/danmaku/admin/words",
-            // WebSocket 长连接入口（浏览器用查询参数带令牌，见下面的专项用例）
-            "GET,    /ws/danmaku"
+            "POST,   /api/v1/danmaku/admin/words"
     })
     void shouldRequireToken(String method, String path) {
         MockServerWebExchange exchange = exchange(method, path.trim(), null);
@@ -236,7 +235,81 @@ class GatewayGoRoutingTests {
         assertThat(chain.invoked).isFalse();
     }
 
+    // ------------------------------------------------------------------ 可选登录
+
+    @DisplayName("可选登录：不带令牌放行，且不注入任何身份头")
+    @ParameterizedTest(name = "{0} {1}")
+    @CsvSource({
+            "GET,  /api/v1/videos",
+            "GET,  /api/v1/videos/1001",
+            "GET,  /api/v1/videos/1001/play",
+            "GET,  /api/v1/videos/1001/interactions",
+            "GET,  /api/v1/videos/interactions?ids=1,2",
+            "GET,  /api/v1/live/rooms",
+            "GET,  /api/v1/live/rooms/5001",
+            "GET,  /api/v1/users/1001/followers",
+            "GET,  /api/v1/users/1001/following"
+    })
+    void optionalAuthPathsShouldPassAsGuest(String method, String path) {
+        ServerWebExchange captured = forward(method, path.trim(), null);
+
+        assertThat(captured.getRequest().getHeaders().getFirst("X-User-Id")).isNull();
+        assertThat(captured.getRequest().getHeaders().getFirst("X-User-Role")).isNull();
+    }
+
+    @Test
+    @DisplayName("可选登录：带合法令牌时仍要校验并注入身份（?mine=true / ?favorite=true 依赖它）")
+    void optionalAuthPathsShouldInjectIdentityWhenTokenPresent() {
+        String token = buildToken("u-1001", "user");
+
+        ServerWebExchange captured = forward("GET", "/api/v1/videos?mine=true", token);
+
+        assertThat(captured.getRequest().getHeaders().getFirst("X-User-Id")).isEqualTo("u-1001");
+        assertThat(captured.getRequest().getHeaders().getFirst("X-User-Role")).isEqualTo("user");
+    }
+
+    @Test
+    @DisplayName("可选登录：令牌非法时返回 401，不能静默降级成游客")
+    void optionalAuthPathsShouldRejectInvalidToken() {
+        MockServerWebExchange exchange = exchange("GET", "/api/v1/videos?favorite=true", "not-a-jwt");
+        ChainSpy chain = new ChainSpy();
+
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(chain.invoked).isFalse();
+    }
+
+    @Test
+    @DisplayName("配置自检：视频/直播读接口必须在 optional-auth，不能退回 permit-all（否则 mine=true 恒 401）")
+    void videoReadPathsMustBeOptionalAuthNotPermitAll() {
+        assertThat(gatewayAuthProperties.getPermitAll())
+                .doesNotContain("GET /api/v1/videos", "GET /api/v1/videos/*",
+                        "GET /api/v1/live/rooms", "GET /api/v1/live/rooms/*");
+        assertThat(gatewayAuthProperties.getOptionalAuth())
+                .contains("GET /api/v1/videos", "GET /api/v1/videos/*");
+    }
+
+    @Test
+    @DisplayName("配置自检：上传路由必须覆盖 5 分钟超时，否则大分片必然 504")
+    void uploadRouteMustOverrideResponseTimeout() {
+        // 全局 response-timeout 是 10s；分片上传单请求可能 40s+
+        assertThat(loadString("spring.cloud.gateway.routes[4].metadata.response-timeout"))
+                .isEqualTo("300000");
+    }
+
     // ------------------------------------------------------------------ 配置自检
+
+    @Test
+    @DisplayName("WebSocket：游客不带令牌也能连（只读），带令牌则注入身份")
+    void wsShouldAllowGuestButStillInjectIdentity() {
+        ServerWebExchange guest = forward("GET", "/ws/danmaku?roomId=5001", null);
+        assertThat(guest.getRequest().getHeaders().getFirst("X-User-Id")).isNull();
+
+        String token = buildToken("u-2001", "user");
+        ServerWebExchange authed = forward("GET", "/ws/danmaku?roomId=5001&access_token=" + token, null);
+        assertThat(authed.getRequest().getHeaders().getFirst("X-User-Id")).isEqualTo("u-2001");
+    }
 
     @Test
     @DisplayName("配置自检：WebSocket 路径必须走查询参数令牌，且必须不在白名单里")

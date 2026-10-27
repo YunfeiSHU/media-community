@@ -66,6 +66,10 @@ order:
     # “已启用验签”只是假象，任何人都能凭仓库里的密钥伪造回调。
     # 为空时跳过验签（会启动 WARN + 每次回调 WARN），仅供本地联调；生产必须通过环境变量配置。
     callback-secret: ${PAYMENT_CALLBACK_SECRET:}
+  mock-pay:
+    # 模拟支付入口（POST /orders/{id}/mock-pay）。它不做验签，
+    # 只允许订单所有者把自己的订单推到已支付；生产必须设为 false（或不部署该路由）。
+    enabled: ${MOCK_PAY_ENABLED:true}
   task:
     # 超时取消 / 权益发放补偿定时任务开关（测试环境关闭）
     enabled: true

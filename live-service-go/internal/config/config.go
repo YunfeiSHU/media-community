@@ -81,6 +81,12 @@ type Media struct {
 	APIBase    string `yaml:"api_base"`
 	App        string `yaml:"app"`
 	HookSecret string `yaml:"hook_secret"`
+	// PublicBase 是回给浏览器的播放地址前缀（如 https://site/live）。
+	//
+	// 为空时退回「http://rtmp_host:http_port」——那是**直连 SRS** 的旧行为，
+	// 只适合本地调试；一旦页面是 HTTPS，http 媒体会被浏览器按混合内容拦截，
+	// 且 localhost 在别的机器上指向用户自己的电脑。
+	PublicBase string `yaml:"public_base"`
 }
 
 // Room 是直播间相关的调参。

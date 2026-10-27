@@ -141,3 +141,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/db/verify-schema.ps1
 - `product-service` / `order-service` 的 `db/schema.sql` **不在** Spring 默认扫描路径（`classpath:schema.sql`）上，所以从来不会自动执行 —— 这才是「必须手工导入」的根本原因，不是配置漏了。
 - `media_live_room` 的 `idx_media_live_room_deleted_at` 是 GORM 自动命名的**真实索引名**，不要改名；改名后 `AutoMigrate` 找不到原名会再建一个，同一列出现两个重复索引。想用自己的名字，必须在 model tag 里显式写 `index:你的名字`。
 - `media-tables.sql` **不能带 UTF-8 BOM**，否则 BOM 会被当成第一条语句的一部分；`verify-schema.ps1` 读文件时也必须显式 `-Encoding UTF8`、写出时无 BOM，否则中文注释会被不可逆地转成 `?`，同样触发 `ERROR 1064`。
+
+---
+
+## 8. 演示种子数据
+
+[`seed-media.sql`](seed-media.sql) 提供 12 条已发布视频 + 3 个直播中房间，用于前端首页/播放页在没有真实投稿时也能看到内容。
+
+```powershell
+cmd /c "mysql --user=root --host=127.0.0.1 --port=3307 --default-character-set=utf8mb4 auth_service < deploy\db\seed-media.sql"
+```
+
+- **幂等**：显式主键（9001–9012 / 9501–9503）+ `INSERT IGNORE`，可重复执行；
+- 封面统一为空，由前端「标题首字 + 渐变」占位；等图片上传跑通后改成 `/media/image/...`；
+- 商品与订单的种子数据随 S3（商城）阶段补。

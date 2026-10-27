@@ -63,7 +63,11 @@ type Video struct {
 	SizeBytes    int64          `gorm:"not null;default:0" json:"sizeBytes"`
 	Status       VideoStatus    `gorm:"type:varchar(16);not null;default:'DRAFT';index:idx_status_created,priority:1" json:"status"`
 	ViewCount    int64          `gorm:"not null;default:0" json:"viewCount"`
-	PublishedAt  *time.Time     `json:"publishedAt"`
+	// 互动计数：由点赞/收藏操作在同一事务里原子增减。
+	// 没有单独建计数表，是为了让列表页一次查询就能拿到（详情/列表 DTO 都要带）。
+	LikeCount     int64          `gorm:"not null;default:0" json:"likeCount"`
+	FavoriteCount int64          `gorm:"not null;default:0" json:"favoriteCount"`
+	PublishedAt   *time.Time     `json:"publishedAt"`
 	CreatedAt    time.Time      `json:"createdAt"`
 	UpdatedAt    time.Time      `json:"updatedAt"`
 	DeletedAt    gorm.DeletedAt `gorm:"index:idx_deleted" json:"-"`

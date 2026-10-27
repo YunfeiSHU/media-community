@@ -113,11 +113,22 @@ func (s *StatsService) Online(ctx context.Context, roomID uint64) (*dto.OnlineRe
 		if err != nil {
 			return nil, err
 		}
+		// 状态 Hash 只是缓存，不能因为缓存缺失就把在线人数当成 0：
+		// 心跳写在独立的 ZSet 里，这里必须仍然读它（否则 seeded/过期状态下永远显示 0 人）。
+		online := s.cache.Online(ctx, roomID)
+		peak := s.cache.Peak(ctx, roomID)
+		if peak < int64(room.PeakOnline) {
+			peak = int64(room.PeakOnline)
+		}
+		viewerTotal := room.ViewerTotal
+		if room.Status.InProgress() {
+			viewerTotal += s.cache.Viewers(ctx, room.ID)
+		}
 		return &dto.OnlineResult{
 			RoomID:      room.ID,
-			OnlineCount: 0,
-			PeakOnline:  room.PeakOnline,
-			ViewerTotal: room.ViewerTotal,
+			OnlineCount: online,
+			PeakOnline:  int(peak),
+			ViewerTotal: viewerTotal,
 		}, nil
 	}
 

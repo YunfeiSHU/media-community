@@ -1,6 +1,7 @@
 package com.example.product.mapper;
 
 import com.example.product.domain.entity.Sku;
+import com.example.product.dto.response.ProductSkuStat;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,6 +18,13 @@ public interface SkuMapper {
 
     /** 查询商品下未删除的 SKU */
     List<Sku> selectByProductId(@Param("productId") Long productId);
+
+    /**
+     * 批量聚合商品下未删除 SKU 的最低价与数量。
+     *
+     * <p>列表页一次查一页商品，不能对每个商品各查一次 SKU（N+1）。
+     */
+    List<ProductSkuStat> selectStatsByProductIds(@Param("productIds") List<Long> productIds);
 
     int countByProductIdAndStatus(@Param("productId") Long productId,
                                   @Param("status") int status);

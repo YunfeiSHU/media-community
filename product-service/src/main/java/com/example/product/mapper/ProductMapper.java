@@ -15,6 +15,17 @@ public interface ProductMapper {
 
     Product selectByProductId(@Param("productId") String productId);
 
+    /** 分页列表：keyword 模糊匹配 name，status / uid 精确匹配（uid 用于「我的商品」） */
+    java.util.List<Product> selectPage(@Param("keyword") String keyword,
+                                       @Param("status") Integer status,
+                                       @Param("uid") String uid,
+                                       @Param("offset") int offset,
+                                       @Param("limit") int limit);
+
+    long countPage(@Param("keyword") String keyword,
+                   @Param("status") Integer status,
+                   @Param("uid") String uid);
+
     /** 按非空字段动态更新 */
     int update(Product product);
 

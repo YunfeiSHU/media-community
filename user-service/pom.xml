@@ -21,7 +21,29 @@
         <mybatis-spring-boot.version>3.0.4</mybatis-spring-boot.version>
         <dubbo.version>3.3.0</dubbo.version>
         <nacos.version>2.3.0</nacos.version>
+        <!-- 与 gateway-service 保持同一套 Spring Cloud 版本，避免 BOM 冲突 -->
+        <spring-cloud.version>2024.0.1</spring-cloud.version>
+        <spring-cloud-alibaba.version>2023.0.3.2</spring-cloud-alibaba.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -31,6 +53,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- 让 user-service 以「HTTP 实例」注册到 Nacos（8001），网关才能 lb://user-service。
+             只靠 Dubbo 注册得到的是接口级 providers，不会产生 HTTP 实例（见 I-010）。 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>

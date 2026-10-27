@@ -101,6 +101,7 @@ func run() error {
 	// ---------------------------------------------------------- 装配
 	videoCache := cache.NewVideoCache(rdb, cfg.View.DetailCacheTTL, log)
 	videoRepo := repository.NewVideoRepository(db)
+	interactionRepo := repository.NewInteractionRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 	transcodeRepo := repository.NewTranscodeRepository(db)
 	uploadRepo := repository.NewUploadSessionRepository(db)
@@ -119,6 +120,8 @@ func run() error {
 		Video:    handler.NewVideoHandler(videoService),
 		Upload:   handler.NewUploadHandler(videoService),
 		Category: handler.NewCategoryHandler(categoryService),
+		Media:       handler.NewMediaHandler(service.NewImageService(objectStore)),
+		Interaction: handler.NewInteractionHandler(service.NewInteractionService(videoRepo, interactionRepo, log)),
 		Health: handler.NewHealthHandler(cfg.App.Name, cfg.App.Version, 3*time.Second, []handler.HealthCheck{
 			{Name: "mysql", Fn: func(ctx context.Context) (string, error) {
 				sqlDB, err := db.DB()

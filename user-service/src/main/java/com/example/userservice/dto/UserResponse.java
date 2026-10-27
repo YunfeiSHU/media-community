@@ -23,10 +23,13 @@ public record UserResponse(
         String bio,
         UserStatus status,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        /** 链路角色名：ADMIN / user。前端用它决定是否显示管理入口；后端仍是唯一鉴权方。 */
+        String role
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(user.getId(), user.getUid(), user.getNickname(), user.getAvatar(),
-                user.getGender(), user.getBio(), user.getStatusEnum(), user.getCreatedAt(), user.getUpdatedAt());
+                user.getGender(), user.getBio(), user.getStatusEnum(), user.getCreatedAt(), user.getUpdatedAt(),
+                user.getRoleEnum().roleName());
     }
 }

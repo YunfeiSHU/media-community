@@ -1,5 +1,9 @@
 server:
   port: 8000
+  # 经 Nginx 反代后需要正确还原 scheme / host（否则重定向与生成的绝对地址会是 http）。
+  # 注意：IP 限流读的是 X-Forwarded-For（见 IpRateLimitFilter），与本项无关；
+  # 安全前提是 Nginx 用 $remote_addr **覆盖**该头，而不是追加客户端传来的值。
+  forward-headers-strategy: framework
 
 spring:
   application:
@@ -31,10 +35,13 @@ spring:
           enabled: false
       routes:
         # 用户服务
+        # user-service 已补 spring-cloud-starter-alibaba-nacos-discovery，会以 HTTP 实例注册到 8001；
+        # 同时 Dubbo 用 register-mode=interface，不会再以应用名注册到 20881（见 I-010）。
         - id: user-service
           uri: lb://user-service
           predicates:
-            - Path=/api/v1/users/**,/api/v1/admin/users/**
+            # /profiles 是公开资料接口，必须在路由里；只加白名单不加路由会 404
+            - Path=/api/v1/users/**,/api/v1/admin/users/**,/api/v1/profiles/**
         # 认证服务
         - id: auth-service
           uri: lb://auth-service
@@ -58,7 +65,14 @@ spring:
         - id: video-service-go
           uri: ${VIDEO_SERVICE_URI:http://localhost:9001}
           predicates:
-            - Path=/api/v1/categories/**,/api/v1/videos/**
+            # /media/images 也归它：图片上传与视频封面共用同一套 MinIO 装配
+            - Path=/api/v1/categories/**,/api/v1/videos/**,/api/v1/media/**
+          metadata:
+            # 全局 response-timeout 是 10s，而 5MiB 分片在 1Mbps 上行要 ~40s，
+            # 不单独放宽必然 504。这里按路由覆盖成 5 分钟；
+            # Nginx 侧对应 proxy_read_timeout 300s（见 deploy/nginx/media-platform.conf）。
+            response-timeout: 300000
+            connect-timeout: 5000
         # 直播服务（含 SRS http_hooks 回调路径）
         - id: live-service-go
           uri: ${LIVE_SERVICE_URI:http://localhost:9002}
@@ -83,6 +97,10 @@ spring:
 # 网关自身的 JWT 配置
 gateway:
   auth:
+    # 强制认证：即使命中 permit-all 也要求有效 JWT（Ant 通配无法排除时的兜底）
+    force-auth:
+      # 与公开的 GET /api/v1/products/* 同形，但必须带身份才能返回“我的商品”
+      - GET /api/v1/products/mine
     # 无需认证即可访问的路径
     # 两种写法：
     #   1) "/path/**"        —— 任意方法均可访问
@@ -103,26 +121,25 @@ gateway:
       # 商品详情、SKU详情：仅 GET 对外公开；创建/修改/删除/上下架/价格/库存等仍必须过 JWT
       - GET /api/v1/products/*
       - GET /api/v1/skus/*
+      # 商品列表：游客可见（服务端只返回上架商品）。注意必须精确匹配，
+      # 不能写成 /api/v1/products/*，否则会把详情以外的子路径一并放开。
+      - GET /api/v1/products
+      # 公开用户资料：只暴露昵称/头像/简介等公开字段，不含状态、内部主键、手机号、邮箱
+      - GET /api/v1/profiles
+      - GET /api/v1/profiles/*
       # 支付渠道异步回调：渠道服务器无法携带用户令牌，必须免 JWT；
       # 该分支会清掉 uid / X-User-Id / X-User-Role，order-service 侧靠支付单反查身份 + 报文验签保证安全
       - POST /api/v1/payments/callback
 
       # ============================= Go 体系 =============================
       # --- video-service-go ---
-      # 分类列表与视频读接口公开（可见性在 service 层判定）；
-      # 注意 "/api/v1/videos/*" 只覆盖详情，"/:id/play" 需要单独一条（Ant 的 * 只匹配单段）
+      # 分类列表公开（可见性在 service 层判定）。
+      # 注意：视频读接口**不在这里**，它们在下面的 optional-auth 里 ——
+      # 因为 ?mine=true / ?favorite=true / 批量点赞状态需要“游客可访问、登录后识别身份”。
       - GET /api/v1/categories
-      - GET /api/v1/videos
-      - GET /api/v1/videos/*
-      - GET /api/v1/videos/*/play
       # --- live-service-go ---
-      # 直播间读接口：游客可见（streamKey / pushUrl 由服务按调用者身份裁剪）
-      - GET /api/v1/live/rooms
-      - GET /api/v1/live/rooms/*
-      - GET /api/v1/live/rooms/*/online
-      - GET /api/v1/live/rooms/*/play
-      # 观众心跳：登录可选，游客用 X-Session-Id（登录用户仍可由网关注入身份）
-      - POST /api/v1/live/rooms/*/heartbeat
+      # 直播间读接口也走 optional-auth：详情里的 streamKey / pushUrl 只对主播本人返回，
+      # 若放在 permit-all，身份头会被剥离，主播自己经网关也拿不到推流地址。
       # SRS http_hooks 回调：SRS 侧不带用户令牌，靠 streamKey / hook_secret 自行校验
       - POST /api/v1/live/hooks/**
       # 本地联调用的「模拟推流 / 断流」：服务侧仅在 debug 模式注册这两个路由，
@@ -133,6 +150,36 @@ gateway:
       - GET /api/v1/danmaku/rooms/*/history
       - GET /api/v1/danmaku/videos/*/history
       - GET /api/v1/danmaku/stats
+
+    # ============================ 可选登录 ============================
+    # 语义：带令牌 → 走完整校验（签名/签发方/受众/过期/黑名单）并注入身份；
+    #      不带令牌 → 放行，但剥离身份头，下游按游客处理；
+    #      令牌非法 → 仍返回 401（不静默降级成游客，否则过期令牌会掩盖问题）。
+    optional-auth:
+      # 视频列表：mine=true / favorite=true 需要 uid；游客只看已发布
+      - GET /api/v1/videos
+      # 视频详情 / 播放地址：登录后按调用者裁剪 sourceObject 等所有者字段
+      - GET /api/v1/videos/*
+      - GET /api/v1/videos/*/play
+      # 播放计数幂等上报（B 阶段新增）
+      - POST /api/v1/videos/*/view
+      # 互动状态：游客返回 liked/favorited=false，登录后返回真实状态
+      - GET /api/v1/videos/*/interactions
+      - GET /api/v1/videos/interactions
+      # 直播读接口：游客可看，主播本人可拿到 streamKey / pushUrl
+      - GET /api/v1/live/rooms
+      - GET /api/v1/live/rooms/*
+      - GET /api/v1/live/rooms/*/online
+      - GET /api/v1/live/rooms/*/play
+      # 观众心跳：游客用 X-Session-Id，登录用户由网关注入 uid
+      - POST /api/v1/live/rooms/*/heartbeat
+      # 关注列表：游客可看（是否登录不影响结果），但写操作仍在 /users/{uid}/follow
+      - GET /api/v1/users/*/followers
+      - GET /api/v1/users/*/following
+      # 弹幕 WebSocket：游客也能看（只读），登录用户用 ?access_token= 注入身份。
+      # 放 permit-all 会剥离身份、登录用户也变成游客；放这里才能两者兼顾。
+      - GET /ws/danmaku
+
     jwt:
       # 生产环境务必通过环境变量注入，不要提交到仓库
       secret: ${JWT_SECRET:change-me-in-production-this-key-must-be-at-least-32-bytes-long}

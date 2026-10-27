@@ -13,6 +13,9 @@ type CreateVideoRequest struct {
 	Description string   `json:"description"`
 	CategoryID  *uint64  `json:"categoryId"`
 	Tags        []string `json:"tags"`
+	// CoverURL 可选：由 POST /media/images 上传后回填；空串表示暂不设置，
+	// 前端在发布前用渐变占位图兜底。
+	CoverURL string `json:"coverUrl"`
 }
 
 // UpdateVideoRequest 是修改视频的请求体。
@@ -22,6 +25,8 @@ type UpdateVideoRequest struct {
 	Description *string   `json:"description"`
 	CategoryID  *uint64   `json:"categoryId"`
 	Tags        *[]string `json:"tags"`
+	// CoverURL 传 "" 表示清除封面；nil 表示不修改。
+	CoverURL *string `json:"coverUrl"`
 }
 
 // ListQuery 是视频列表查询条件（由 handler 从 query string 解析）。
@@ -33,6 +38,8 @@ type ListQuery struct {
 	OwnerID    string
 	Status     string
 	Mine       bool
+	// Favorite 为 true 时只返回当前用户的收藏（需要登录）
+	Favorite bool
 }
 
 // CreateCategoryRequest 是新建分类的请求体。
@@ -172,6 +179,20 @@ type PlayInfo struct {
 	Format      string       `json:"format"`
 	PlaybackURL string       `json:"playbackUrl"`
 	Sources     []PlaySource `json:"sources"`
+}
+
+// InteractionState 是单条视频的互动状态。
+type InteractionState struct {
+	VideoID       uint64 `json:"videoId"`
+	Liked         bool   `json:"liked"`
+	Favorited     bool   `json:"favorited"`
+	LikeCount     int64  `json:"likeCount"`
+	FavoriteCount int64  `json:"favoriteCount"`
+}
+
+// InteractionList 是批量互动状态返回。
+type InteractionList struct {
+	Items []InteractionState `json:"items"`
 }
 
 // TranscodeInfo 是转码任务状态。

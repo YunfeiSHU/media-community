@@ -16,7 +16,11 @@ dubbo:
     password: ${NACOS_PASSWORD:nacos}
     register: true # 注册Nacos服务，默认true：作为服务提供者，把自己的地址注册到注册中心 
     #服务提供者： 实现 @DubboService的 类，Dubbo默认实现服务注册
-    register-mode: instance
+    # 注册模式必须用 interface，不能用 instance：
+    # instance 模式下 Dubbo 会把「应用名 user-service」以 **Dubbo 端口(20881)** 注册到 Nacos，
+    # 与 Spring Cloud 注册的「user-service :8001」同名，网关 lb://user-service 会解析到 20881，
+    # 把 HTTP 请求发到 Dubbo 的 Netty 端口 —— 表现为 200 但响应体为空（Netty 报 invalid version UNSUPPORTED）。
+    register-mode: interface
     # 设置注册模式：
     # all: 双注册（默认，兼容Dubbo 2.x 接口级注册）
     # instance: 仅应用级注册（推荐）

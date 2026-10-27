@@ -245,3 +245,19 @@ Envoy sidecar 服务间通信），与 compose 不冲突也不共用。见 [`k8s
 | [`k8s/README.md`](k8s/README.md) | Kubernetes 部署步骤与设计说明 |
 | [`../docs/Go微服务-公共约定.md`](../docs/Go微服务-公共约定.md) | Go 侧的目录结构 / 响应格式 / 错误码 / 消息拓扑约定 |
 | [`../docs/Go微服务-问题解决记录.md`](../docs/Go微服务-问题解决记录.md) | 全部踩过并修复的坑（含 §9 按症状索引的排查清单） |
+
+---
+
+## 10. 生产部署（公网）
+
+上线拓扑、TLS、防火墙、前端两种部署方式、媒体地址联动与检查清单，见
+[`nginx/README.md`](nginx/README.md)。
+
+生产变量模板见 [`.env.production.example`](.env.production.example)（复制为 `.env.production`，
+权限 600，不提交仓库），关键点：
+
+- 只有 **443 / 80 / 1936** 对公网开放，其余端口在 compose 里已绑 `127.0.0.1`
+- `JWT_SECRET`、`PAYMENT_CALLBACK_SECRET` 必须换成随机值，auth 与 gateway 一致
+- `MOCK_PAY_ENABLED=false`、`AUTH_VERIFICATION_EXPOSE_CODE=false`
+- `VIDEO_MINIO_PUBLIC_ENDPOINT=https://your.site/media`、`LIVE_PUBLIC_BASE=https://your.site/live`
+- `docker compose --env-file .env.production --profile infra --profile java --profile media up -d`

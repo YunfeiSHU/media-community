@@ -1,0 +1,13 @@
+services:
+  # 前端静态站 + 同源反代（容器内 nginx.conf 已按服务名配置上游）
+  web:
+    profiles: ["web"]
+    build:
+      context: ../../web
+      dockerfile: Dockerfile
+    container_name: gomedia-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_HOST_PORT:-8080}:80"
+    depends_on:
+      - gateway
