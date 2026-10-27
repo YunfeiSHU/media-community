@@ -1,45 +1,194 @@
 # 音视频社区（media-platform）
 
-B 站风格的音视频社区：**8 个后端服务**（Java 5 + Go 3）+ **React 前端**。
-支持点播上传与播放、直播与弹幕、点赞/收藏/关注、商城下单与模拟支付。
-
-> 这是一个面向作品集的项目：重点在**契约一致、边界清晰、问题有记录**，
-> 而不是堆功能。所有“为什么这么做”的取舍都写在文档里。
+B 站风格的音视频社区，前后端分离：React SPA + 8 个后端服务（Java 5 / Go 3）。
+覆盖点播上传与播放、直播、弹幕、点赞收藏关注、商城订单，以及创作与后台管理。
 
 ---
 
-## 1. 架构
+## 1. 技术栈
+
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React 18 · TypeScript 5.6 · Vite 6 · React Router 6 · TanStack Query 5 · Zustand 5 · Tailwind 3 · hls.js / flv.js · Playwright |
+| Java 服务 | Java 17 · Spring Boot 3 · Spring Cloud Gateway 2023 · Nacos · OpenFeign · MyBatis · MySQL |
+| Go 服务 | Go 1.25 · Gin · GORM · MinIO SDK · WebSocket |
+| 基础设施 | MySQL 8 · Redis 7 · RabbitMQ · Nacos · MinIO · SRS 5 · Nginx · Docker Compose / K8s |
+
+---
+
+## 2. 代码结构
+
+```text
+media-platform/
+├─ web/                                  React SPA
+│  ├─ src/app/                           路由、布局、全局 Provider
+│  ├─ src/pages/                         按业务域拆分的路由页面
+│  │  ├─ home/ search/ video/            首页、搜索、播放页
+│  │  ├─ upload/ studio/                 投稿、视频/商品管理
+│  │  ├─ live/                           直播列表、开播管理、直播间
+│  │  ├─ shop/ orders/                   商城、商品详情、订单
+│  │  ├─ user/ space/                    他人主页、个人空间、资料编辑
+│  │  ├─ admin/ auth/                    管理后台、登录注册
+│  │  └─ not-found/
+│  ├─ src/entities/                      领域 API + 类型 + TanStack Query hooks
+│  │  └─ video live danmaku product order user category admin upload
+│  ├─ src/features/                      跨页面能力
+│  │  └─ auth/ danmaku/ video-upload/
+│  ├─ src/widgets/                       可复用 UI 组合
+│  │  └─ site-header/ video-card/ live-card/ player/ danmaku-layer/ empty-state/
+│  └─ src/shared/                        api / ws / store / styles / ui / lib
+│
+└─ media-platform-backend/
+   ├─ gateway-service/                   Spring Cloud Gateway：路由、JWT 校验、身份注入
+   ├─ auth-service/                      注册、登录、刷新、登出、验证码
+   ├─ user-service/                      资料、公开 profiles、关注/粉丝、角色
+   ├─ product-service/                   商品、SKU、库存
+   ├─ order-service/                     订单、模拟支付
+   ├─ video-service-go/                  视频、分片上传、转码、播放、点赞收藏、图片
+   ├─ live-service-go/                   直播间、开播/结束、心跳、在线人数
+   ├─ danmaku-service-go/                弹幕 REST + WebSocket
+   ├─ deploy/                            Compose、Nginx、SQL、启停脚本
+   └─ docs/                              契约、联调与问题记录
+```
+
+前端按 **页面 → 领域实体 → 通用组件** 分层：页面只做组合与交互，接口与缓存收敛在
+`entities/*`，鉴权、上传、弹幕等跨页逻辑放在 `features/*`，请求封装、WebSocket、主题与
+基础 UI 放在 `shared/*`。
+
+---
+
+## 3. 业务模块
+
+### 3.1 账号与鉴权
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/login`、`/register`；`features/auth` 保存会话与用户状态；未登录访问受保护页带 `returnTo` 回跳 |
+| 后端 | `gateway-service` 统一校验 JWT 并注入 `X-User-Id` / `X-User-Role`；`auth-service` 负责账号与令牌 |
+
+- 手机号 / 邮箱注册，验证码发送与校验
+- 登录、刷新令牌、登出；刷新请求单飞 + 跨标签页锁，避免并发刷新互相失效
+- 登出写入 JWT 黑名单；密码 BCrypt 存储
+- 网关统一鉴权，下游服务不再解析 JWT
+
+### 3.2 用户与社交
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/space` 我的空间、`/user/:uid` 他人主页、`/settings` 资料编辑；粉丝/关注列表 |
+| 后端 | `user-service`：资料读写、批量 profiles、关注关系、粉丝/关注分页、管理员用户查询 |
+
+- 昵称、头像、性别、简介编辑；头像上传走视频服务图片接口
+- 公开主页展示作品数、粉丝数、关注数、作品 / 粉丝 / 关注三个 Tab
+- 关注 / 取消关注幂等，返回最新关注状态与计数
+- 资料与列表均支持游客只读
+
+### 3.3 点播与上传
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/` 首页、`/search` 搜索、`/video/:id` 播放页、`/upload` 投稿、`/studio/videos` 视频管理 |
+| 后端 | `video-service-go`：视频 CRUD、分片上传、FFmpeg 转码、HLS、封面上传、视频管理 |
+
+- 首页推荐流、分类筛选、关键词搜索、分页
+- 播放页：HLS 播放、点赞/收藏、UP 主卡、简介与标签、点播弹幕
+- 分片上传：5MiB 分片、并发上传、断点续传、失败退避重试、取消
+- FFmpeg 生成 360p / 720p / 1080p 多码率 HLS，前端轮询转码状态后发布
+- 视频管理：我的投稿、编辑标题/简介/分区/标签、下架、删除
+
+### 3.4 互动
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | 播放页操作区、个人空间「我的收藏」 |
+| 后端 | `video-service-go` 点赞、收藏、收藏列表、计数聚合 |
+
+- 点赞 / 取消点赞、收藏 / 取消收藏，均幂等
+- 收藏列表按收藏时间倒序，和「我的投稿」共用视频列表接口
+- 批量查询当前用户对一屏视频的点赞/收藏状态，避免 N+1
+
+### 3.5 直播
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/streams` 直播列表、`/streams/manage` 开播管理、`/streams/:id` 直播间 |
+| 后端 | `live-service-go`：直播间、开播/结束、推流地址、心跳、在线人数 |
+
+- 创建直播间、我的直播间、进入房间
+- 主播控制台：开始/结束直播，展示 OBS 推流「服务器 / 串流密钥」并支持分别复制
+- 观众端：HLS 优先（hls.js），FLV 兜底；直播模式关闭原生进度条
+- 20s 心跳、8s 在线人数轮询；房间状态 LIVING / ENDED / FAILED
+
+### 3.6 弹幕
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `features/danmaku` + `widgets/danmaku-layer`；播放页与直播间共用 |
+| 后端 | `danmaku-service-go`：历史查询、发送、WebSocket 广播 |
+
+- 点播：按视频时间轴回放历史弹幕，发送时绑定当前播放进度
+- 直播：WebSocket 实时收发，进入房间下发 welcome 与最近弹幕
+- 弹幕样式、颜色、滚动轨道；REST 作为 WS 断线时的兜底
+
+### 3.7 商城与订单
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/shop` 商城、`/shop/:id` 商品详情、`/studio/products` 商品管理、`/orders` 订单 |
+| 后端 | `product-service`：商品/SKU/库存；`order-service`：下单、支付、订单查询 |
+
+- 商品列表、关键词搜索、商品详情、SKU 选择、数量与库存校验
+- 下单、模拟支付、订单列表与订单详情
+- 商品管理：创建商品与默认 SKU、上架/下架、改价、补库存
+
+### 3.8 管理后台
+
+| 层 | 实现 |
+| --- | --- |
+| 前端 | `/admin` 五个 Tab，仅 ADMIN 可见入口 |
+| 后端 | `video-service-go`、`user-service`、`live-service-go` 的管理接口 |
+
+- 分类创建与列表
+- 敏感词词库维护
+- 强制关闭直播间
+- 按 userId 查询用户
+- 视频下架
+
+---
+
+## 4. 架构与接口约定
 
 ```text
 浏览器
-  └─ Nginx（同源入口，唯一公网端口）
+  └─ Nginx（同源入口）
        ├─ /            → web（React SPA）
-       ├─ /api         → gateway:8000（JWT 校验 → 注入 X-User-Id/X-User-Role）
+       ├─ /api         → gateway:8000（JWT 校验 → 注入 X-User-Id / X-User-Role）
        ├─ /ws          → gateway → danmaku-service（WebSocket）
        ├─ /media       → MinIO（HLS 分片、封面）
        └─ /live        → SRS（HLS / HTTP-FLV）
 
-gateway ─┬─ auth-service     (8002) 登录 / 刷新 / 登出 / 验证码
-         ├─ user-service     (8001) 资料 / 公开 profiles / 关注
-         ├─ product-service  (8003) 商品 / SKU / 库存
-         ├─ order-service    (8004) 订单 / 支付 / mock-pay
-         ├─ video-service-go (9001) 视频 / 分片上传 / 转码 / 图片 / 点赞收藏
-         ├─ live-service-go  (9002) 直播间 / 开播 / 心跳 / 在线人数
+gateway ─┬─ auth-service       (8002) 登录 / 刷新 / 登出 / 验证码
+         ├─ user-service       (8001) 资料 / profiles / 关注
+         ├─ product-service    (8003) 商品 / SKU / 库存
+         ├─ order-service      (8004) 订单 / 支付
+         ├─ video-service-go   (9001) 视频 / 上传 / 转码 / 互动
+         ├─ live-service-go    (9002) 直播间 / 开播 / 心跳
          └─ danmaku-service-go (9003) 弹幕 REST + WebSocket
 ```
 
-**关键约定**
+**接口约定**
 
 - 下游服务只信任网关注入的 `X-User-Id` / `X-User-Role`，不解析 JWT。
-- 需要“游客可看、登录后看自己的”接口走 `optional-auth`（有令牌校验注入、无令牌放行）。
-- 页面与接口同源，不依赖 CORS；媒体地址一律相对路径。
-- 统一响应 `{code,message,data}`；时间目标格式 RFC3339 `+08:00`。
+- 游客可读、登录后读自己的接口使用 `optional-auth`：有令牌则校验并注入，无令牌放行。
+- 页面与接口同源，不依赖 CORS；媒体地址一律使用相对路径。
+- 统一响应 `{ code, message, data }`；时间使用 RFC3339 `+08:00`；分页、空值、枚举约定见
+  [契约约定.md](media-platform-backend/docs/契约约定.md)。
 
 ---
 
-## 2. 快速开始
+## 5. 快速开始
 
-### 前端（无需后端也能看页面）
+### 前端
 
 ```bash
 cd web
@@ -47,29 +196,20 @@ pnpm install
 pnpm dev          # http://localhost:5173
 ```
 
-默认 `VITE_USE_MOCK=1`，用内置 mock 数据渲染首页/播放页/商城。
-接真实后端时删掉 `.env.development` 里的这一行即可。
+默认 `VITE_USE_MOCK=1`，没有后端也能用内置数据浏览页面；联调时改为 `0` 或删除该行。
 
 ### 后端
 
-一条命令（推荐）：
-
 ```powershell
 cd media-platform-backend/deploy
-.\dev-up.ps1        # 起 infra + 导表 + 建桶 + 启动 8 个服务
-.\dev-down.ps1      # 停止（-KeepInfra 只停服务）
+.\dev-up.ps1      # 起基础设施 + 导表 + 建桶 + 启动 8 个服务
+.\dev-down.ps1    # 停止（-KeepInfra 只停服务）
 ```
 
-手工方式：
-
-```bash
-cd media-platform-backend/deploy
-cp .env.example .env      # 填 MYSQL 密码等
-docker compose --profile infra --profile java --profile media up -d
-```
-
-首次启动后按 [`deploy/db/README.md`](media-platform-backend/deploy/db/README.md) 导入商品/订单表，
-再执行 [`deploy/db/seed-media.sql`](media-platform-backend/deploy/db/seed-media.sql) 写入演示用户、视频与直播间。
+首次启动后按
+[deploy/db/README.md](media-platform-backend/deploy/db/README.md)
+导入商品/订单表，再执行
+[seed-media.sql](media-platform-backend/deploy/db/seed-media.sql)。
 
 ### 前端容器（可选）
 
@@ -80,79 +220,24 @@ docker compose -f compose.yml -f compose.web.yml --profile web up -d --build
 
 ---
 
-## 3. 已完成的功能
-
-| 领域 | 能力 |
-| --- | --- |
-| 账号 | 注册（手机/邮箱验证码）、登录、**刷新单飞 + 跨标签锁**、登出；**资料编辑（昵称/头像/性别/简介）** |
-| 点播 | 首页/搜索/播放页、HLS 播放、分片上传（并发 3 / 断点续传 / 退避重试）、封面上传、转码轮询、发布、**点播弹幕（按进度回放 / 发送 / WS）** |
-| 互动 | 点赞、收藏（按收藏时间排序）、关注；**他人主页（作品 / 粉丝 / 关注）** |
-| 直播 | 直播列表、直播间 HLS/FLV、20s 心跳、8s 在线轮询、弹幕 WS；**创建直播间 / 我的直播间 / 主播控制台（开始/结束、推流地址）** 全链路可用 |
-| 商城 | 商品列表、SKU 选择、下单、模拟支付、订单列表与详情；**商品管理（建品/SKU/上下架/改价/补库存）** |
-| 创作 | **视频管理**（我的投稿、编辑、下架、删除） |
-| 管理 | **管理后台**：分类创建、敏感词词库、强制关播、按 userId 查用户、视频下架（需 ADMIN） |
-| 体验 | 深浅色主题、骨架屏与空态、未登录 `returnTo` 回跳、`prefers-reduced-motion` |
-
-### 明确未实现（当前版本）
-
-- **评论 / 投币**：产品决策不做
-- **真实支付 / 退款售后 / 通知 / 推荐 / 搜索增强 / 清晰度手动切换**
-- **粉丝/关注分页滚动加载**（当前只取第一页 20 条）
-- **用户封禁 / 审核队列**（管理后台只做查询与内容处置）
-
----
-
-## 4. 文档索引
+## 6. 文档索引
 
 | 文档 | 内容 |
 | --- | --- |
-| [前端设计-后端前置问题与代码架构.md](前端设计-后端前置问题与代码架构.md) | 最初的可行性分析：后端缺口、前端架构 |
-| [后端前置任务.md](后端前置任务.md) | Gate 1–3 任务清单、验收标准、排期与实时进度 |
-| [开发问题记录.md](开发问题记录.md) | 代码 / 业务逻辑问题（联调 I、后端 B、前端 F） |
-| [开发环境问题.md](开发环境问题.md) | 构建、脚本、编码、沙箱等非业务问题（E） |
-| [web/docs/UI设计规范.md](web/docs/UI设计规范.md) | 设计 token、组件规则、页面截图与 P3 待办 |
 | [契约约定.md](media-platform-backend/docs/契约约定.md) | 信封、时间、分页、空值、ID、枚举、鉴权、媒体地址 |
 | [web/README.md](web/README.md) | 前端目录分层与本地开发说明 |
+| [web/docs/UI设计规范.md](web/docs/UI设计规范.md) | 设计 token、组件规则与页面截图 |
+| [media-platform-backend/deploy/README.md](media-platform-backend/deploy/README.md) | Compose、端口、启停与部署 |
+| [本地联调.md](media-platform-backend/docs/本地联调.md) | 本机全栈启动与链路验证步骤 |
+| [开发问题记录.md](开发问题记录.md) | 代码 / 业务逻辑问题的根因与修复 |
+| [开发环境问题.md](开发环境问题.md) | 构建、脚本、编码等环境问题 |
 
 ---
 
-## 5. 真实联调验证（已完成）
+## 7. 运行注意
 
-2026-10-26 在本机起全栈（MySQL / Redis / RabbitMQ / MinIO / Nacos / SRS + 8 个服务）跑通：
-
-| 链路 | 结果 |
-| --- | --- |
-| 注册 → 登录 → `/users/me` | ✅ 经网关，JWT 注入身份 |
-| 公开资料 `/profiles`、关注/关系/粉丝 | ✅ 批量与单条均正常 |
-| 点赞 / 取消 / 收藏 / 收藏列表 | ✅ 幂等、计数正确、收藏按时间倒序 |
-| 分片上传 → 真实 FFmpeg 转码 360p/720p/1080p → 发布 → HLS 播放 | ✅ master.m3u8 200/206，ts 可取 |
-| 商品创建 → SKU → 上架 → 下单 → mock-pay → 订单详情 | ✅ 状态流转正确 |
-| 直播房间 / 心跳 / 在线人数 / 弹幕 REST + WebSocket | ✅ 中文弹幕、welcome 身份、广播均正常 |
-| 浏览器 E2E（真实后端） | ✅ `pnpm e2e:real`：2 passed（含浏览器内上传发布、真实 HLS 播放） |
-| 浏览器 E2E（mock） | ✅ `pnpm e2e`：4 passed |
-
-联调中暴露并修复的 10 个问题（profiles 缺路由、Dubbo 实例名冲突、`/live` 路由与媒体代理冲突、
-refresh 字段名不一致、ffmpeg 工作目录相对路径、在线人数缓存缺失等）全部记录在
-[开发问题记录.md](开发问题记录.md)，可复现步骤见
-[本地联调.md](media-platform-backend/docs/本地联调.md)。
-
----
-
-## 6. 已知限制
-
-1. **转码演示必须 `VIDEO_TRANSCODER_DRIVER=real`**：`mock` 只生成结构正确但没有分片的 m3u8，播放器会一直转圈。
-2. **Windows + 受限终端构建**：若 `pnpm build` 报 `spawn EPERM` / 删临时文件被拒，把 `TEMP` 指向工作区目录再跑：
-   `$env:TEMP="$PWD\..\.tmp-build"; pnpm build`（本机与 CI 通常不需要）。
-3. **`mock-pay` 只在本地/演示开启**（`MOCK_PAY_ENABLED`），生产必须关闭。
-4. **E2E 首次需装浏览器**：`pnpm exec playwright install chromium`。
-5. **浏览器不能直接 RTMP 推流**：主播用 OBS，直播间页已提供「开播 + 复制推流地址 + 状态轮询」控制台。
-6. **种子直播间没有真实推流**：`seed-media.sql` 的房间状态是 `LIVING`，但播放器会等流；
-   在线人数来自心跳，不是真实观众。要验证完整直播链路需 OBS 或 `/live/dev/publish`。
-
----
-
-## 7. 技术栈
-
-- 前端：React 18 · TypeScript 5 · Vite 6 · TanStack Query 5 · Zustand 5 · Tailwind 3 · hls.js
-- 后端：Spring Boot 3 / Spring Cloud Gateway / MyBatis（Java）· Gin / GORM / MinIO SDK（Go）
-- 基础设施：MySQL 8 · Redis 7 · Nacos · RabbitMQ · MinIO · SRS 5
+1. 转码演示需 `VIDEO_TRANSCODER_DRIVER=real`；`mock` 只生成结构正确但没有分片的 m3u8。
+2. Windows 受限终端若 `pnpm build` 报 `spawn EPERM`，把 `TEMP` 指向工作区目录再执行。
+3. `mock-pay` 只在本地/演示开启（`MOCK_PAY_ENABLED`），生产必须关闭。
+4. 浏览器不能直接 RTMP 推流，主播使用 OBS；种子直播间没有真实推流，需 OBS 或
+   `/live/dev/publish` 才能验证完整直播链路。
