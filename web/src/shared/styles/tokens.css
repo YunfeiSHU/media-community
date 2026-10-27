@@ -1,0 +1,82 @@
+/* 设计 token v2：浅色优先，暗色只换变量不换结构 */
+:root {
+  color-scheme: light;
+
+  /* 品牌 */
+  --brand-pink: #fb7299;
+  --brand-pink-hover: #ff85a9;
+  --brand-blue: #00aeec;
+
+  /* 背景 */
+  --bg-page: #f1f2f3;
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f2f3f5;
+  --bg-hover: #f6f7f8;
+
+  /* 文字 */
+  --text-primary: #0f1215;
+  --text-secondary: #61666d;
+  --text-tertiary: #9499a0;
+
+  /* 线条与状态 */
+  --border: #e5e7eb;
+  --divider: #f0f1f2;
+  --danger: #f56c6c;
+  --success: #2ba471;
+  --warning: #ff9f0a;
+
+  /* 圆角：4 角标 / 8 控件 / 12 卡片 / 16 播放器 */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* 阴影：默认几乎无感，hover/弹层才明显 */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 3%);
+  --shadow-hover: 0 8px 24px rgb(0 0 0 / 8%);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 16%);
+
+  --header-h: 60px;
+  --content-max: 1280px;
+
+  /* 首页顶部氛围光：浅色稍明显，暗色自动减弱 */
+  --home-glow-pink: rgb(251 114 153 / 16%);
+  --home-glow-blue: rgb(0 174 236 / 12%);
+
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-page: #0f1114;
+  --bg-card: #181a1e;
+  --bg-elevated: #22252a;
+  --bg-subtle: #22252a;
+  --bg-hover: #22252a;
+
+  --text-primary: #f1f2f3;
+  --text-secondary: #a8abb2;
+  --text-tertiary: #7f848b;
+
+  --border: #2b2f36;
+  --divider: #24272c;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-hover: 0 8px 24px rgb(0 0 0 / 55%);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 60%);
+
+  --home-glow-pink: rgb(251 114 153 / 10%);
+  --home-glow-blue: rgb(0 174 236 / 7%);
+}
+
+/* 尊重系统「减少动态效果」偏好：卡片缩放、弹幕滚动都应关闭 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

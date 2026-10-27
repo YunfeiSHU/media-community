@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-page font-sans text-ink antialiased;
+  }
+
+  ::selection {
+    background: var(--brand-pink);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-pink);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d0d3d6 transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #d0d3d6;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .ui-btn {
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-full px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-btn-primary {
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-btn-ghost {
+    @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-line bg-card px-4 text-sm font-medium text-ink-secondary transition-colors hover:bg-subtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ui-input {
+    @apply h-9 w-full rounded-sm border border-line bg-subtle px-3 text-sm text-ink placeholder:text-ink-tertiary focus:border-brand focus:bg-card focus:outline-none;
+  }
+
+  .ui-card {
+    @apply rounded-md border border-line bg-card;
+  }
+
+  .ui-chip {
+    @apply inline-flex h-7 shrink-0 items-center rounded-full px-3 text-meta text-ink-secondary transition-colors hover:bg-subtle;
+  }
+
+  .ui-chip-active {
+    @apply bg-brand text-white hover:bg-brand-hover;
+  }
+
+  /* 仅首页顶部使用：两团很淡的粉/蓝光，暗色由 token 自动减弱 */
+  .home-glow {
+    background:
+      radial-gradient(900px 420px at 15% 0%, var(--home-glow-pink), transparent 60%),
+      radial-gradient(800px 420px at 85% 0%, var(--home-glow-blue), transparent 60%);
+  }
+}
+
+/* 弹幕：从右往左匀速滚动；TOP/BOTTOM 固定在中间几秒后淡出 */
+@keyframes danmaku-move {
+  from {
+    transform: translateX(100vw);
+  }
+  to {
+    transform: translateX(-110%);
+  }
+}
+
+@keyframes danmaku-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.danmaku-scroll {
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+  animation-name: danmaku-move;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.danmaku-fixed {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+  animation: danmaku-fade 5s ease forwards;
+}
+
+/* 尊重「减少动态效果」：弹幕不再滚动，直接淡出，避免前庭不适 */
+@media (prefers-reduced-motion: reduce) {
+  .danmaku-scroll {
+    animation-name: danmaku-fade;
+    animation-duration: 4s;
+    transform: translateX(0);
+  }
+}

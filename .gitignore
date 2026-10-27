@@ -1,48 +1,26 @@
-# ===========================================================================
-# 单仓多服务的忽略规则
-#
-# 本仓库收录：跨服务文档 / 部署编排 + 8 个服务的源码。
-# 各服务自己的 .gitignore（target/、bin/、node_modules/ 等）仍然生效，
-# 这里是仓库级的公共部分。
-# ===========================================================================
+# 构建/测试缓存（不要提交）
+.gocache/
+.npm-cache/
+.pnpm-store/
+.tmp-build/
 
-# ---------------------------------------------------------------- 本地环境变量
-# deploy/.env.example 是必须入库的模板；实际使用的 deploy/.env 不入库
-deploy/.env
-.env
-.env.local
-*.env.local
+# 本地服务运行产物（日志、pid、cmd 包装）
+media-platform-backend/deploy/runtime/
 
-# ---------------------------------------------------------------- 构建产物（兜底）
-target/
-bin/
-*.exe
-*.dll
-*.class
-*.jar
-dist/
-build/
-node_modules/
-.venv/
+# 本地环境变量（含口令，绝不提交）
+media-platform-backend/deploy/.env
+media-platform-backend/deploy/.env.production
 
-# ---------------------------------------------------------------- 测试与运行产物
-*.log
-logs/
-coverage.out
-*.test
+# 前端产物与依赖
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/.env.local
+web/.env.*.local
 
-# ---------------------------------------------------------------- 临时文件
-*.tmp
-*.bak
-*~
-.idea/
-*.iml
-*.swp
-*.swo
+# 本地调试导出的接口响应
+danmaku.json
 
-# ---------------------------------------------------------------- 操作系统
-Thumbs.db
-Desktop.ini
-.DS_Store
-
-deploy/runtime/
+# TypeScript 增量构建信息
+*.tsbuildinfo

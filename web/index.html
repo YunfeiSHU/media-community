@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fb7299" />
+    <title>视频社区</title>
+    <script>
+      // 首屏前就定好主题，避免浅色闪一下再变深色（FOUC）。
+      // 与 shared/store/theme.ts 使用同一个 localStorage key。
+      try {
+        var stored = localStorage.getItem('mp.theme');
+        var theme =
+          stored === 'light' || stored === 'dark'
+            ? stored
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.dataset.theme = theme;
+      } catch (error) {
+        /* 隐私模式下 localStorage 可能抛错，忽略即可 */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
